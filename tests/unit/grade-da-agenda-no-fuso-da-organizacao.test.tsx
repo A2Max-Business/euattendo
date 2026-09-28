@@ -149,10 +149,26 @@ describe("grade no fuso da organização", () => {
   it("fuso igual ao do ambiente: nada muda — é a identidade", () => {
     const ambiente = relogioDoAmbiente();
     desenhar(ambiente);
-    const regua = screen.getByTestId("regua-do-agora");
-    expect(regua.getAttribute("style")).toContain(topoEsperado(AGORA, ambiente));
 
-    // ...e NÃO a da organização, provando que o valor não está cravado no teste.
-    expect(regua.getAttribute("style")).not.toContain(topoEsperado(AGORA, FUSO));
+    if (NA_GRADE(ambiente)) {
+      const regua = screen.getByTestId("regua-do-agora");
+      expect(regua.getAttribute("style")).toContain(topoEsperado(AGORA, ambiente));
+
+      // ...e NÃO a da organização, provando que o valor não está cravado no teste.
+      expect(regua.getAttribute("style")).not.toContain(topoEsperado(AGORA, FUSO));
+      return;
+    }
+
+    // Fora da janela (7h–21h) a grade não desenha "agora" — e é EXATAMENTE
+    // isto que tem de acontecer, para o ambiente quanto para a organização.
+    //
+    // Com `TZ=Asia/Tokyo` os 14:30Z são 23:30: antes este caso procurava a
+    // régua, não achava e reprovava por o elemento sumir. O defeito não era o
+    // produto (não pintar o relógio às 23:30 numa grade que vai até 21h é
+    // certo), era a asserção exigir o caso feliz de todo fuso. Assim o teste
+    // passa em QUALQUER `TZ` e continua falhando se a grade voltar a pintar
+    // régua fora da sua própria janela.
+    expect(screen.queryByTestId("regua-do-agora")).toBeNull();
+    expect(NA_GRADE(ambiente)).toBe(false);
   });
 });

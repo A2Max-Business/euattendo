@@ -284,7 +284,7 @@ function CamadaDeMarcacao({
   return (
     <>
       {CELULAS.map((minuto) => {
-        const livre = horarioNaCelula(publicados, minuto);
+        const livre = horarioNaCelula(publicados, minuto, fuso);
         const inicio = instanteDoMinuto(dia, minuto, fuso);
         const fim = instanteDoMinuto(dia, minuto + PASSO_DA_CELULA_MIN, fuso);
         const ocupado = agendamentosDoDia.some(
@@ -613,8 +613,12 @@ function ColunaDeDia({
   };
 }) {
   const localeDaData = useLocaleDeData();
-  const doDia = agendamentos.filter((c) => isSameDay(new Date(c.comeca), dia));
-  const ehHoje = isSameDay(dia, agora);
+  const doDia = agendamentos.filter(
+    (c) => chaveDoDiaDoInstante(new Date(c.comeca), fuso) === chaveDoDia(dia),
+  );
+  // "Hoje" é o dia da ORGANIZAÇÃO, não o do navegador: a mesma data marca
+  // colunas diferentes em cada lado do mundo.
+  const ehHoje = chaveDoDia(dia) === chaveDoDiaDoInstante(agora, fuso);
 
   return (
     <div
@@ -741,7 +745,9 @@ function VisaoDeMes({
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-[repeat(auto-fit,minmax(0,1fr))]">
         {semanas.flat().map((d) => {
-          const doDia = agendamentos.filter((c) => isSameDay(new Date(c.comeca), d));
+          const doDia = agendamentos.filter(
+            (c) => chaveDoDiaDoInstante(new Date(c.comeca), fuso) === chaveDoDia(d),
+          );
           const doMes = isSameMonth(d, ancora);
           return (
             <div
@@ -756,7 +762,7 @@ function VisaoDeMes({
                 <span
                   className={cn(
                     "flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] tabular-nums",
-                    isSameDay(d, agora)
+                    chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)
                       ? "bg-accent font-semibold text-accent-foreground"
                       : doMes
                         ? "text-text"
@@ -878,7 +884,7 @@ export function GradeDaAgenda({
   const montarProposta = React.useCallback(
     (id: string, chave: string, minutoBruto: number): PropostaDeRemarcacao => {
       const publicados = interacao?.horariosPorDia[chave] ?? [];
-      const alvo = alvoDoArraste(publicados, minutoBruto);
+      const alvo = alvoDoArraste(publicados, minutoBruto, fuso);
       const dia = new Date(`${chave}T12:00:00`);
       const minutoCelula = celulaQueContem(minutoBruto);
       const inicio = instanteDoMinuto(dia, minutoCelula, fuso);
@@ -905,7 +911,7 @@ export function GradeDaAgenda({
         }),
       };
     },
-    [agendamentos, agora, interacao],
+    [agendamentos, agora, interacao, fuso],
   );
 
   /** Que coluna e que minuto estão sob um ponto da tela. */
@@ -1008,7 +1014,7 @@ export function GradeDaAgenda({
         // informação que o arraste dá pelos olhos e o teclado não tem como ver.
         // Sem vaga adiante, ela ainda anda — e o fantasma inválido é o que diz
         // que não há para onde ir, em vez de a tecla ficar muda.
-        const vizinho = publicadoVizinho(interacao.horariosPorDia[dia] ?? [], base, direcao);
+        const vizinho = publicadoVizinho(interacao.horariosPorDia[dia] ?? [], base, direcao, fuso);
         const alvo = vizinho
           ? minutoDoInstante(new Date(vizinho.instante), fuso)
           : base + direcao * PASSO_DA_CELULA_MIN;
@@ -1043,7 +1049,7 @@ export function GradeDaAgenda({
         setProposta(null);
       }
     },
-    [interacao, proposta, montarProposta, limites.primeiro, limites.ultimo],
+    [interacao, proposta, montarProposta, limites.primeiro, limites.ultimo, fuso],
   );
 
   const arrasteDoCard = interacao?.onArrastarPara
@@ -1083,7 +1089,7 @@ export function GradeDaAgenda({
                 agendamentos={agendamentos}
                 pessoas={pessoas}
                 onAbrir={onAbrirAgendamento}
-                destacado={visao === "semana" && isSameDay(d, agora)}
+                destacado={visao === "semana" && chaveDoDia(d) === chaveDoDiaDoInstante(agora, fuso)}
                 soNoDesktop={visao === "semana" && !isSameDay(d, ancora)}
                 interacao={interacao}
                 proposta={proposta}

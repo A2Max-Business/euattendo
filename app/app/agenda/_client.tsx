@@ -23,7 +23,7 @@ import { EmptyAgenda } from "@/components/empty";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
 import { ancoraAoFecharPainel } from "@/lib/agenda/ancora-depois-de-marcar";
 import { ancoraLocalDoDia } from "@/lib/agenda/semana-semente";
-import { diaLocalISO, partesNoFuso } from "@/lib/agenda/fuso";
+import { dataDeParede, diaLocalISO, partesNoFuso } from "@/lib/agenda/fuso";
 import { janelaDoMesVisivel } from "@/lib/agenda/janela-do-mes-visivel";
 import { recorteDaGrade as recorteDaGradeDe } from "@/lib/agenda/recorte-da-grade";
 import { resolverResponsavelDoPainel } from "@/lib/agenda/responsavel-do-painel";
@@ -368,7 +368,7 @@ export function AgendaClient({
       });
     }
     return mapa;
-  }, [horarios]);
+  }, [horarios, fusoDaAgenda]);
 
   // OS AGENDAMENTOS SÃO REAIS, e agora TAMBÉM se atualizam sem recarregar.
   //
@@ -986,7 +986,11 @@ export function AgendaClient({
                 const alvo = todos.find((a) => a.id === cancelandoId);
                 if (!alvo) return t("Este agendamento não está mais na lista.");
                 const quem = alvo.quemSeraAtendido ? ` ${t("de")} ${alvo.quemSeraAtendido}` : "";
-                return `${alvo.titulo}${quem}, ${format(new Date(alvo.comeca), t("d 'de' MMMM 'às' HH:mm"), { locale: localeDaData })}.`;
+                return `${alvo.titulo}${quem}, ${format(
+                  dataDeParede(new Date(alvo.comeca), fusoDaAgenda),
+                  t("d 'de' MMMM 'às' HH:mm"),
+                  { locale: localeDaData },
+                )}.`;
               })()}
             </p>
             <label
@@ -1069,6 +1073,9 @@ export function AgendaClient({
         agendamentos={agendamentosAcionaveis}
         pessoas={pessoas}
         agora={new Date()}
+        // Mesma régua da grade ao lado: sem isto a lista imprime o relógio do
+        // navegador e a MESMA tela diz duas horas para o mesmo compromisso.
+        fuso={fusoDaAgenda}
         className="max-h-[320px]"
         // ⚠️ ESTAS DUAS PROPS FALTAVAM, e a ausência tinha cara de permissão.
         // `HistoricoDaAgenda` usa `disabled={!onRemarcar}`; sem elas os botões
@@ -1158,7 +1165,13 @@ export function AgendaClient({
         onMarcarEm={
           podeMarcar
             ? (instante) => {
-                setHorarioEscolhido({ instante, rotulo: format(new Date(instante), "HH:mm") });
+                setHorarioEscolhido({
+                  instante,
+                  // HH:mm no MESMO fuso em que a grade desenhou o clique: sem
+                  // isto o resumo guardava a hora do NAVEGADOR e não batia com
+                  // a célula que a pessoa acabou de escolher.
+                  rotulo: format(dataDeParede(new Date(instante), fusoDaAgenda), "HH:mm"),
+                });
                 setRemarcandoId(null);
                 // `abrirMarcacao` e não `setMarcando(true)`: clicar num bloco
                 // livre abre uma marcação NOVA, e ela nasce com o vínculo da rota.

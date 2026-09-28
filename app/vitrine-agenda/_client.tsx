@@ -219,6 +219,7 @@ export function VitrineDaAgenda() {
           agendamentos={AGENDAMENTOS}
           pessoas={PESSOAS}
           agora={ANCORA}
+          fuso={Intl.DateTimeFormat().resolvedOptions().timeZone}
           className="h-[420px]"
         />
       </Secao>

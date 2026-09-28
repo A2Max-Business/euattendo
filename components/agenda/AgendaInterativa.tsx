@@ -43,6 +43,7 @@ export function AgendaInterativa({
   visao,
   ancora,
   agora,
+  fuso,
   pessoas,
   agendamentos,
   recorte,
@@ -57,6 +58,11 @@ export function AgendaInterativa({
   ancora: Date;
   /** INJETADO, como na grade: relógio lido aqui dentro daria dois relógios ao teste. */
   agora: Date;
+  /**
+   * O fuso RESOLVIDO da organização — a régua de hora de parede da grade.
+   * Sem ele a grade desenha no relógio do navegador (issue #1362).
+   */
+  fuso: string;
   pessoas: Pessoa[];
   agendamentos: Agendamento[];
   /** A MESMA janela que a grade desenha — vem de quem já a calcula, sem recontá-la. */
@@ -325,6 +331,7 @@ export function AgendaInterativa({
         visao={visao}
         ancora={ancora}
         agora={agora}
+        fuso={fuso}
         pessoas={pessoas}
         agendamentos={desenhados}
         onAbrirAgendamento={onAbrirAgendamento}

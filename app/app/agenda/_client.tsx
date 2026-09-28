@@ -23,6 +23,7 @@ import { EmptyAgenda } from "@/components/empty";
 import { rotuloDoLocal } from "@/lib/agenda/locais";
 import { ancoraAoFecharPainel } from "@/lib/agenda/ancora-depois-de-marcar";
 import { ancoraLocalDoDia } from "@/lib/agenda/semana-semente";
+import { diaLocalISO, partesNoFuso } from "@/lib/agenda/fuso";
 import { janelaDoMesVisivel } from "@/lib/agenda/janela-do-mes-visivel";
 import { recorteDaGrade as recorteDaGradeDe } from "@/lib/agenda/recorte-da-grade";
 import { resolverResponsavelDoPainel } from "@/lib/agenda/responsavel-do-painel";
@@ -74,6 +75,7 @@ const VISOES: Array<{ id: VisaoDaAgenda; rotulo: string }> = [
  * imports sem querer.
  */
 export function AgendaClient({
+  fusoDaAgenda,
   fusoDeApresentacao,
   hojeNaOrganizacao,
   usuarioId,
@@ -86,6 +88,12 @@ export function AgendaClient({
   agendamentosIniciais,
   podeMarcar,
 }: {
+  /**
+   * O fuso RESOLVIDO da organização (`fusoUtilizavel(activeOrg.timezone)`,
+   * calculado em `page.tsx`). É a régua da grade: sem ele a agenda desenha
+   * hora de parede no relógio do navegador (issue #1362).
+   */
+  fusoDaAgenda: string;
   fusoDeApresentacao: string | null;
   /**
    * A data de HOJE no fuso da ORGANIZAÇÃO, resolvida pelo servidor
@@ -347,8 +355,17 @@ export function AgendaClient({
     const mapa: Record<string, Array<{ instante: string; rotulo: string }>> = {};
     for (const s of horarios?.slots ?? []) {
       const d = new Date(s.inicio);
-      const chave = format(d, "yyyy-MM-dd");
-      (mapa[chave] ??= []).push({ instante: s.inicio, rotulo: format(d, "HH:mm") });
+      // A CHAVE E O RÓTULO SAEM DO FUSO DA ORGANIZAÇÃO: o slot das 09:00 da
+      // clínica é daquele dia e daquela hora PARA ELA, não para quem está
+      // olhando (issue #1362). O lookup em `PainelDeMarcacao` continua batendo,
+      // porque ele indexa pela data de calendário da mesma âncora.
+      const chave = diaLocalISO(d, fusoDaAgenda);
+      const p = partesNoFuso(d, fusoDaAgenda);
+      const dois = (n: number) => String(n).padStart(2, "0");
+      (mapa[chave] ??= []).push({
+        instante: s.inicio,
+        rotulo: `${dois(p.hora)}:${dois(p.minuto)}`,
+      });
     }
     return mapa;
   }, [horarios]);
@@ -1125,6 +1142,7 @@ export function AgendaClient({
           proposta de remarcação, o otimismo com volta atrás) mora em
           `AgendaInterativa`; aqui fica só o que esta tela já sabia. */}
       <AgendaInterativa
+        fuso={fusoDaAgenda}
         visao={visao}
         ancora={ancora}
         agora={new Date()}

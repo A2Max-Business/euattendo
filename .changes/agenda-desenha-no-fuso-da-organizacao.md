@@ -21,3 +21,5 @@ posição da régua e o rótulo do card contra a hora de parede esperada; ele
 reprova se a grade voltar a ler o relógio local.
 
 Refs #1362
+
+Contribuição de @webtecnica (#1831).

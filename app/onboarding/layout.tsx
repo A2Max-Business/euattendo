@@ -5,8 +5,10 @@ import { loadOnboardingState } from "@/app/actions/onboarding/_shared";
 import { Stepper } from "./_components/Stepper";
 import { OutrasOrganizacoes } from "./_components/OutrasOrganizacoes";
 import { SkipToEnd } from "./_components/SkipToEnd";
-import { SimboloDoProduto } from "@/components/branding/MarcaDoProduto";
-import { branding, marcaEhADoProduto } from "@/lib/branding";
+import { branding } from "@/lib/branding";
+import { marcaDaInstalacao } from "@/lib/branding/instalacao";
+import { iconeDaAba } from "@/lib/branding/icone";
+import { baseDoStorage } from "@/lib/branding/logo";
 import { passosVisiveis } from "@/lib/onboarding/passos";
 import { env } from "@/lib/env";
 import { IdiomaProvider } from "@/lib/i18n/IdiomaProvider";
@@ -34,6 +36,13 @@ export default async function OnboardingLayout({ children }: { children: React.R
 
   const isDev = process.env.NODE_ENV !== "production";
   const marca = branding();
+  // Ícone pequeno de REFORÇO, nunca o logotipo completo: o nome já é escrito
+  // como legenda ao lado (`marca.name`), então usar o logo inteiro aqui duplica
+  // a marca em dois formatos ao mesmo tempo. `iconeDaAba` é a mesma resolução
+  // de `app/icon.tsx` — arquivo subido em Marca › ícone da aba, com fallback
+  // para o ladrilho desenhado quando não há upload.
+  const linhaDaMarca = await marcaDaInstalacao();
+  const iconeUrl = iconeDaAba(linhaDaMarca?.favicon_path, baseDoStorage());
 
   return (
     <IdiomaProvider locale={user.idioma}>
@@ -41,10 +50,18 @@ export default async function OnboardingLayout({ children }: { children: React.R
         <header className="border-b bg-background">
           <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 py-4">
             <div className="flex items-center gap-3">
-              {/* O nome está escrito logo abaixo — o símbolo é reforço, não legenda. */}
-              {marcaEhADoProduto(marca) && (
-                <SimboloDoProduto nome={marca.name} decorativo className="h-9 w-9" />
-              )}
+              {/* O nome está escrito logo abaixo — o símbolo é reforço, não legenda.
+                <img> em vez de next/image de propósito, mesmo motivo de
+                `components/shell/Sidebar.tsx`: a URL vem de quem hospeda (banco),
+                fora da allowlist de domínios fechada no build da imagem
+                pré-buildada. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={iconeUrl}
+                alt={marca.name}
+                decoding="async"
+                className="h-9 w-9 rounded-md object-contain"
+              />
               <div>
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">{marca.name}</p>
                 <h1 className="text-lg font-semibold tracking-tight">{activeOrg.name}</h1>

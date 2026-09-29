@@ -27,6 +27,8 @@ vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn() }));
 vi.mock("@/lib/api/client", () => ({ apiClient: api }));
 
+import { CustomFieldsEditor } from "@/components/contacts/CustomFieldsEditor";
+import { EditContactDialog } from "@/components/contacts/EditContactDialog";
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { LeadFieldsForm } from "@/components/kanban/LeadFieldsForm";
 import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
@@ -166,6 +168,39 @@ describe("o documento e o exemplo de telefone seguem o país da organização", 
 
     expect(await screen.findByText(/\+999123456789/)).toBeTruthy();
     expect(screen.queryByText(/\+5511999998888/)).toBeNull();
+  });
+
+  it("a EDIÇÃO do contato usa a mesma régua, e não a brasileira", async () => {
+    orgAtiva.atual = { currency: "EUR", country: "XI" };
+    const usuario = userEvent.setup();
+    render(
+      <EditContactDialog
+        open
+        onOpenChange={() => {}}
+        contact={{ id: "c1", display_name: "Rita", name: "Rita", phone_number: null, email: null, tags: [], custom_fields: {} } as never}
+      />,
+    );
+
+    const telefone = screen.getByLabelText(/Telefone/i);
+    await usuario.clear(telefone);
+    await usuario.type(telefone, "912345678");
+    await usuario.click(screen.getByRole("button", { name: /Salvar/i }));
+
+    expect(await screen.findByText(/\+999123456789/)).toBeTruthy();
+    expect(screen.queryByText(/\+5511999998888/)).toBeNull();
+  });
+
+  it("o campo personalizado de telefone também mostra o exemplo do país", () => {
+    orgAtiva.atual = { currency: "EUR", country: "XI" };
+    render(
+      <CustomFieldsEditor
+        mode="contact"
+        fields={[{ key: "tel", label: "Telemóvel", type: "phone" } as never]}
+        value={{}}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByPlaceholderText("+999123456789")).toBeTruthy();
   });
 
   it("sem país declarado, vale o Brasil — nada muda para quem já usa", () => {

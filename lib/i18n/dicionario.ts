@@ -10411,8 +10411,8 @@ export const DICIONARIO: Traducoes = {
   },
   "e-mail inválido: ": { es: "e-mail inválido: " },
   "telefone inválido: ": { es: "teléfono inválido: " },
-  " (use DDI+DDD+número, ex.: +5511999998888)": {
-    es: " (usa código de país+código de área+número, ej.: +5511999998888)",
+  " (use o número com o código do país, por exemplo ": {
+    es: " (usa el número con el código del país, por ejemplo ",
   },
   "linha sem telefone nem e-mail": { es: "fila sin teléfono ni e-mail" },
   "Cabeçalho inválido:": { es: "Encabezado inválido:" },

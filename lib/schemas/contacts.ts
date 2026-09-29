@@ -72,11 +72,11 @@ export type ContactPatch = z.infer<typeof contactPatchSchema>;
 /**
  * O documento do titular vem do PERFIL DO PAÍS da organização (issue #1033).
  *
- * `contactCreateSchema` continua sendo a régua brasileira — é o schema que as
- * telas de cliente usam e o comportamento de quem já instalou. Estas fábricas
- * só trocam o campo do documento: tudo o mais é o MESMO schema, estendido, e
- * não uma segunda cópia — duas listas de campos divergem no dia em que uma
- * ganhar um campo novo.
+ * `contactCreateSchema` continua sendo a régua brasileira, para quem não tem um
+ * perfil em mãos. Estas fábricas trocam o campo do documento e a MENSAGEM do
+ * telefone (o E.164 é universal; o exemplo não era): tudo o mais é o MESMO
+ * schema, estendido, e não uma segunda cópia — duas listas de campos divergem
+ * no dia em que uma ganhar um campo novo.
  *
  * Por que fábrica e não ler o país aqui dentro: o schema é síncrono e puro, e a
  * resposta certa vem do banco (`perfilDaOrganizacao`), resolvida uma vez por

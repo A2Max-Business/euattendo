@@ -127,6 +127,10 @@ describe("loadAuthUser — falha de permissão não vira 'sem organização'", (
         role: "admin",
         locale: null,
         timezone: null,
+        // Mesma carona, mesmo contrato: quando a consulta não traz, chega
+        // `null`, e não um padrão inventado no meio do caminho.
+        currency: null,
+        country: null,
         interface_settings: { preset: "completa" },
       },
     ]);

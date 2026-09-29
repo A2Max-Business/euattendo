@@ -1,11 +1,11 @@
 ---
 impacto: capacidade_nova
 secao: adicionado
-titulo: A tela de atualização conta quando o banco precisou de segunda tentativa
+titulo: A tela de atualização diz onde está o detalhe da disputa de banco
 ---
 
-Quando você atualiza pelo botão da tela e o banco estava sendo usado por outro processo, a atualização não para na primeira recusa: o servidor tenta de novo e fecha. Isso já acontecia — o que não acontecia era eu **contar**. A tela dizia "sucesso" e o aviso de que houve disputa, quantas retentativas custou e em qual passada tudo fechou ficava escondido no arquivo `.update.log`, no servidor, onde só quem tem acesso de terminal lia.
+Quando a atualização pelo botão da tela encontra o banco em uso por outro processo e precisa de mais de uma passada, o resumo dessa disputa já aparecia no fim da atualização. Faltava dizer onde procurar o detalhe.
 
-Agora o resumo aparece junto do fim da atualização, em português: diz que a base estava ocupada, quantas passadas foram necessárias e onde está o detalhe passo a passo (o `.update.log`, na pasta do projeto no servidor). Se a rodada não teve disputa nenhuma, não aparece linha nenhuma — aviso sem motivo é ruído, e quem ignora o ruído acaba ignorando o aviso de verdade. Nada muda para quem atualiza pela linha de comando, e o `.update.log` continua sendo a fonte detalhada de sempre.
+Agora, logo abaixo do resumo, a tela aponta os dois arquivos na pasta do projeto no servidor: o `.update.log`, com o que cada passada não aplicou, e o `.deskcomm-banco.log`, com a saída completa do banco, passada por passada. A linha aparece tanto quando a atualização termina bem quanto quando ela volta para a versão anterior. Se a rodada não teve disputa, ou se ela não foi medida, a linha não aparece. Nada muda para quem atualiza pela linha de comando. Não exige ação.
 
 Contribuição de @webtecnica (#1040).

@@ -5908,8 +5908,8 @@ export const DICIONARIO: Traducoes = {
   "Detalhes técnicos (útil se for pedir ajuda)": {
     es: "Detalles técnicos (útil si vas a pedir ayuda)",
   },
-  "O detalhe de cada passada está no arquivo .update.log, na pasta do projeto no servidor.": {
-    es: "El detalle de cada pasada está en el archivo .update.log, en la carpeta del proyecto en el servidor.",
+  "O que cada passada não aplicou fica no arquivo .update.log, e a saída completa do banco, passada por passada, no .deskcomm-banco.log — os dois na pasta do projeto no servidor.": {
+    es: "Lo que cada pasada no aplicó queda en el archivo .update.log, y la salida completa de la base, pasada por pasada, en .deskcomm-banco.log — los dos en la carpeta del proyecto en el servidor.",
   },
   "Atualização do sistema": { es: "Actualización del sistema" },
   "Guardando uma cópia de segurança dos seus dados": {

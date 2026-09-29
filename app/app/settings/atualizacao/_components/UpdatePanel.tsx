@@ -196,7 +196,7 @@ export function UpdatePanel() {
         {detalheNoLog ? (
           <p className="mt-3 text-sm text-muted-foreground">
             {t(
-              "O detalhe de cada passada está no arquivo .update.log, na pasta do projeto no servidor.",
+              "O que cada passada não aplicou fica no arquivo .update.log, e a saída completa do banco, passada por passada, no .deskcomm-banco.log — os dois na pasta do projeto no servidor.",
             )}
           </p>
         ) : null}
@@ -232,7 +232,7 @@ export function UpdatePanel() {
         {detalheNoLog ? (
           <p className="mt-3 text-sm text-muted-foreground">
             {t(
-              "O detalhe de cada passada está no arquivo .update.log, na pasta do projeto no servidor.",
+              "O que cada passada não aplicou fica no arquivo .update.log, e a saída completa do banco, passada por passada, no .deskcomm-banco.log — os dois na pasta do projeto no servidor.",
             )}
           </p>
         ) : null}

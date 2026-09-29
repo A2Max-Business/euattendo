@@ -3430,6 +3430,14 @@ export const DICIONARIO: Traducoes = {
   "Seu sistema usa inteligência artificial em": { es: "Tu sistema usa inteligencia artificial en" },
   "Skills da IA": { es: "Skills de la IA" },
   "Skills instaladas": { es: "Skills instaladas" },
+  "Há uma versão nova do modelo deste skill no catálogo. Adote para usar a mais recente — a sua edição não é reescrita, a nova versão vira a ativa.": {
+    es: "Hay una versión nueva del modelo de esta skill en el catálogo. Adóptala para usar la más reciente: tu edición no se reescribe y la nueva versión pasa a ser la activa.",
+  },
+  "Adotar versão nova": { es: "Adoptar versión nueva" },
+  "Adotando…": { es: "Adoptando…" },
+  "Versão nova adotada — a sua cópia agora usa a versão mais recente do catálogo.": {
+    es: "Versión nueva adoptada: tu copia ahora usa la versión más reciente del catálogo.",
+  },
   "Skills prontas, mantidas pela plataforma, disponíveis para instalar com um clique.": {
     es: "Skills listas para usar, mantenidas por la plataforma e instalables con un clic.",
   },

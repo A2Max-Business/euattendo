@@ -121,6 +121,12 @@ describe("o roteamento dos workflows", () => {
     expect(naMaquina).toEqual(ESPERADO);
   });
 
+  it("publica cada arquitetura em runner nativo do GitHub", () => {
+    expect(mapa.get("publish-image.yml::build-and-push")).toBe(
+      "${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}",
+    );
+  });
+
   it("nenhum workflow com pull_request_target manda job para a máquina", () => {
     for (const arquivo of readdirSync(".github/workflows")) {
       const texto = readFileSync(`.github/workflows/${arquivo}`, "utf-8");

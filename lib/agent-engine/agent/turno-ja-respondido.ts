@@ -108,10 +108,17 @@ export async function ultimaInboundJaRespondida(
  *
  * ## A régua
  *
- * Existe inbound gravada DEPOIS de `ultima_inbound_vista_em` (a anotação que o
- * turno fez antes de ler a conversa)? Então a resposta foi escrita sem ela, e a
- * mensagem nova tem job próprio, que lê a conversa inteira e responde a tudo
- * de uma vez. Este turno não envia.
+ * A inbound mais nova da conversa foi gravada DEPOIS de `ultima_inbound_vista_em`
+ * (a anotação que o turno fez antes de ler a conversa)? Então a resposta foi
+ * escrita sem ela, e a mensagem nova tem job próprio, que lê a conversa inteira
+ * e responde a tudo de uma vez. Este turno não envia.
+ *
+ * "Mais nova" é pela MESMA ordem do anti-backlog do drain
+ * (`coalesce(sent_at, created_at)`, o relógio do aparelho): é o drain quem
+ * decide qual mensagem ganha turno. Uma mensagem reentregue com atraso (webhook
+ * que voltou 503, replay) chega DEPOIS da anotação com relógio ANTERIOR ao da
+ * última lida; o drain pula o evento dela como superado, e descartar a resposta
+ * por causa dela deixaria o cliente sem ninguém respondendo.
  *
  * ## O teto
  *
@@ -140,12 +147,14 @@ export async function respostaFicouObsoleta(
        select min(m.created_at) as em from messages m cross join ultima_out o
         where m.organization_id = $1 and m.conversation_id = $2 and m.direction = 'inbound'
           and (o.em is null or m.created_at > o.em)
+     ),
+     mais_nova as (
+       select created_at as em from messages
+        where organization_id = $1 and conversation_id = $2 and direction = 'inbound'
+        order by coalesce(sent_at, created_at) desc, created_at desc, id desc
+        limit 1
      )
-     select exists (
-              select 1 from messages m cross join vista v
-               where m.organization_id = $1 and m.conversation_id = $2
-                 and m.direction = 'inbound' and v.em is not null and m.created_at > v.em
-            )
+     select coalesce((select m.em > v.em from mais_nova m cross join vista v), false)
             and coalesce((select em from pendente) > now() - ($4 * interval '1 millisecond'), false)
             as obsoleta`,
     [alvo.organizationId, alvo.conversationId, alvo.jobId, tetoMs],

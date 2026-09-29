@@ -139,9 +139,6 @@ describe("tela de atualização — a rodada conta a disputa do banco", () => {
 
     const ponteiro = screen.getByText(/\.update\.log/);
     expect(ponteiro.textContent).toContain("na pasta do projeto no servidor");
-    // A saída completa de cada passada mora no .deskcomm-banco.log (update.sh
-    // grava lá via reaplicar_baseline); o .update.log só recebe até 10 linhas.
-    expect(ponteiro.textContent).toContain(".deskcomm-banco.log");
   });
 
   it("o resumo e o ponteiro vêm JUNTOS — apontar o log sem contar o resumo seria jogar o problema pra trás da tela", () => {

@@ -68,6 +68,8 @@ export function NewLeadDialog({
 }: Props) {
   const t = useT();
   const org = useActiveOrg();
+  // Negócio NOVO nasce na moeda da organização (createLeadHandler).
+  const moedaDoValor = org?.currency ?? MOEDA_PADRAO;
   const create = useCreateLead(pipelineId);
   const initialStage = useMemo(() => defaultStageId(stages), [stages]);
   // Quem abre o diálogo já sabendo o contato (Inbox) não escolhe de novo.
@@ -243,14 +245,14 @@ export function NewLeadDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               {/* O rótulo segue a moeda da organização: `R$` em duro mentia para quem opera em euro. */}
-              <Label htmlFor="valueReais">{t("Valor")} ({simboloDaMoeda(org?.currency ?? MOEDA_PADRAO)})</Label>
+              <Label htmlFor="valueReais">{t("Valor")} ({simboloDaMoeda(moedaDoValor)})</Label>
               <Input
                 id="valueReais"
                 inputMode="decimal"
                 placeholder="0,00"
                 {...form.register("valueReais")}
               />
-              <EcoDoValor control={form.control} />
+              <EcoDoValor control={form.control} moeda={moedaDoValor} />
               {form.formState.errors.valueReais && (
                 <p className="text-xs text-error-fg">
                   {form.formState.errors.valueReais.message}

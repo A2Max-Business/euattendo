@@ -27,6 +27,7 @@ vi.mock("@/lib/api/client", () => ({ apiClient: { get: vi.fn(), post: vi.fn(), p
 
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { LeadFieldsForm } from "@/components/kanban/LeadFieldsForm";
+import { NewLeadDialog } from "@/components/kanban/NewLeadDialog";
 
 const XISTAO: PerfilDoPais = {
   codigo: "XI",
@@ -74,17 +75,43 @@ afterEach(() => {
   orgAtiva.atual = null;
 });
 
-describe("o valor do negócio usa a moeda da organização", () => {
-  it("organização em euro lê 'Valor (€)'", () => {
+const FUNIL = "33333333-3333-4333-8333-333333333333";
+
+describe("o valor do negócio usa a moeda certa — e o eco embaixo do campo também", () => {
+  it("negócio JÁ GRAVADO manda na moeda, mesmo se a empresa trocou depois", () => {
+    // Trocar a moeda da organização não reescreve o que nasceu antes: o cartão
+    // e o dossiê mostram a persistida, e a edição precisa concordar com eles.
+    orgAtiva.atual = { currency: "BRL", country: null };
+    render(<LeadFieldsForm lead={NEGOCIO} pipelineId={FUNIL} />);
+    expect(screen.getByText(/Valor \(€\)/)).toBeTruthy();
+    expect(screen.getByText(/= 249,90/)).toBeTruthy();
+    expect(screen.queryByText(/R\$/)).toBeNull();
+  });
+
+  it("negócio sem moeda gravada cai na da organização", () => {
     orgAtiva.atual = { currency: "EUR", country: null };
-    render(<LeadFieldsForm lead={NEGOCIO} pipelineId="33333333-3333-4333-8333-333333333333" />);
+    render(<LeadFieldsForm lead={{ ...(NEGOCIO as object), currency: null } as never} pipelineId={FUNIL} />);
     expect(screen.getByText(/Valor \(€\)/)).toBeTruthy();
   });
 
   it("e quem está em real continua lendo 'Valor (R$)'", () => {
     orgAtiva.atual = { currency: "BRL", country: null };
-    render(<LeadFieldsForm lead={NEGOCIO} pipelineId="33333333-3333-4333-8333-333333333333" />);
+    render(<LeadFieldsForm lead={{ ...(NEGOCIO as object), currency: "BRL" } as never} pipelineId={FUNIL} />);
     expect(screen.getByText(/Valor \(R\$\)/)).toBeTruthy();
+    expect(screen.getByText(/= R\$\s?249,90/)).toBeTruthy();
+  });
+
+  it("negócio NOVO nasce na moeda da organização", () => {
+    orgAtiva.atual = { currency: "EUR", country: null };
+    render(
+      <NewLeadDialog
+        open
+        onOpenChange={() => {}}
+        pipelineId={FUNIL}
+        stages={[{ id: "44444444-4444-4444-8444-444444444444", name: "Novo" } as never]}
+      />,
+    );
+    expect(screen.getByText(/Valor \(€\)/)).toBeTruthy();
   });
 });
 
@@ -106,10 +133,11 @@ describe("o documento e o exemplo de telefone seguem o país da organização", 
 });
 
 /**
- * Os casos acima simulam `useActiveOrg`, então nenhum deles nota se a moeda e o
- * país deixarem de VIAJAR até o cliente. Este aqui prende o fio: sem as duas
- * colunas no embed da membership, as telas voltam a cair no padrão sem nada
- * ficar vermelho.
+ * Quem prova o fio por COMPORTAMENTO é `auth-falha-alto.test.ts`
+ * (`loadAuthUser → resolveActiveOrg`, com a organização e o acompanhamento
+ * administrativo). Este caso cobre o degrau que nenhum dublê alcança: o dublê
+ * daquele teste devolve as colunas venha o que vier no `select`, então tirá-las
+ * do embed não o derrubaria — e a tela cairia no padrão em produção.
  */
 describe("a organização ativa leva moeda e país ao cliente", () => {
   it("o embed da membership pede as duas colunas", () => {

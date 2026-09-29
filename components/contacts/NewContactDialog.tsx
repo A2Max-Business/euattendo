@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { normalizarTags } from "@/lib/contacts/tag-normalizada";
-import { contactCreateSchema, type ContactCreate } from "@/lib/schemas/contacts";
+import { contactCreateSchemaDoPais, type ContactCreate } from "@/lib/schemas/contacts";
 import type { Contact } from "@/lib/types/contacts";
 import { useCreateContact } from "@/hooks/contacts/useCreateContact";
 
@@ -71,7 +71,9 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
     if (values.cpf?.trim()) payload.cpf = values.cpf.trim();
     if (tags.length) payload.tags = tags;
 
-    const parsed = contactCreateSchema.safeParse(payload);
+    // A MESMA régua do servidor: a tela que mostra 'Bilhete' não pode
+    // recusá-lo como CPF antes de chegar lá.
+    const parsed = contactCreateSchemaDoPais(perfil).safeParse(payload);
     if (!parsed.success) {
       const first = parsed.error.issues[0];
       setServerError(first?.message ?? t("Dados inválidos"));

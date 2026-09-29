@@ -288,10 +288,25 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
 export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<ActiveOrg | null> => {
   if (authUser.support) {
     if (authUser.support.status !== "active") redirect("/support-ended");
+    // Acompanhamento não tem membership, e era por isso que este caminho
+    // devolvia a organização PELADA: sem fuso, e agora sem moeda nem país. A
+    // tela então caía nos padrões e mostrava `R$` dentro de uma empresa em
+    // euro — o mesmo defeito que este conserto ataca, por outra porta. Uma
+    // leitura por id, só nas sessões de acompanhamento; falha degrada para o
+    // que havia antes, porque perder o acesso de suporte é pior que um símbolo
+    // errado.
+    const { data: orgDoSuporte } = await createAdminClient()
+      .from("organizations")
+      .select("timezone, currency, country")
+      .eq("id", authUser.support.organization_id)
+      .maybeSingle();
     return {
       orgId: authUser.support.organization_id,
       name: authUser.support.name,
       role: authUser.support.access_mode === "full" ? "admin" : "viewer",
+      timezone: orgDoSuporte?.timezone ?? null,
+      currency: orgDoSuporte?.currency ?? null,
+      country: orgDoSuporte?.country ?? null,
     };
   }
   const store = await cookies();

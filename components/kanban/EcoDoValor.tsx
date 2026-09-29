@@ -2,7 +2,7 @@
 
 import { useWatch, type Control, type FieldValues, type Path } from "react-hook-form";
 
-import { parseReaisToCents, formatCentsBRL } from "@/lib/money";
+import { formatCents, parseReaisToCents } from "@/lib/money";
 
 /**
  * Mostra, embaixo do campo, como o valor digitado foi entendido.
@@ -15,11 +15,18 @@ import { parseReaisToCents, formatCentsBRL } from "@/lib/money";
  * devolve uma função que o React Compiler não consegue memoizar, e ele então
  * desiste de otimizar o formulário inteiro.
  */
-export function EcoDoValor<T extends FieldValues>({ control }: { control: Control<T> }) {
+export function EcoDoValor<T extends FieldValues>({
+  control,
+  moeda,
+}: {
+  control: Control<T>;
+  /** A moeda do negócio; o eco em real embaixo de um campo em euro era o defeito. */
+  moeda: string;
+}) {
   const digitado = useWatch({ control, name: "valueReais" as Path<T> }) as unknown as
     | string
     | undefined;
   const centavos = parseReaisToCents(digitado ?? "");
   if (centavos === null) return null;
-  return <p className="text-xs text-muted-foreground">= {formatCentsBRL(centavos)}</p>;
+  return <p className="text-xs text-muted-foreground">= {formatCents(centavos, moeda)}</p>;
 }

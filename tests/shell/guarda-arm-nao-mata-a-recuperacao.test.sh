@@ -4,25 +4,27 @@
 # O DEFEITO, e por que os dois testes que já existiam não o pegaram:
 #
 #   A guarda de arquitetura (#1042) estava no TOPO do `source _common.sh`, e
-#   saía com `exit 1` assim que `uname -m` não era x86_64/amd64. A recuperação
+#   saía com `exit 1` assim que `uname -m` não era uma arquitetura publicada.
+#   A recuperação
 #   por build local (#1060/#1143, `construir_aqui_e_subir` + o overlay
 #   `docker-compose.build.yml`) vive bem DEPOIS, no corpo do update.sh. As duas
 #   mudanças tinham teste verde ISOLADAMENTE — `arquitetura-kit.test.sh` prova
 #   que a recusa acontece; nenhum teste rodava `update.sh` de ponta a ponta com
-#   um `uname` de ARM. Juntas, a recusa matava o script na primeira linha e a
-#   recuperação ficava inalcançável: quem JÁ TINHA uma instalação ARM
-#   funcionando ficava sem poder rodar `update.sh` nunca mais, sem bandeira.
+#   um `uname` de arquitetura sem imagem. Juntas, a recusa matava o script na
+#   primeira linha e a recuperação ficava inalcançável: quem JÁ TINHA uma
+#   instalação nessa arquitetura funcionando ficava sem poder rodar `update.sh`
+#   nunca mais, sem bandeira.
 #
 # O QUE ESTE ARQUIVO PROVA, e o que NÃO prova:
 #
-#   Prova que com `uname -m` = aarch64 e uma instalação que JÁ EXISTE
+#   Prova que com `uname -m` = riscv64 (arquitetura ainda não publicada) e uma instalação que JÁ EXISTE
 #   (compose + `.env`), o `update.sh` ALCANÇA o caminho de recuperação: o
 #   `docker compose -f docker-compose.build.yml build` é executado e o update
-#   termina com o CRM no ar. Prova também que a instalação NOVA em ARM
-#   continua recusada com a mesma mensagem do #1042, e que x86_64 não mudou
+#   termina com o CRM no ar. Prova também que uma instalação NOVA em riscv64
+#   continua recusada com a mensagem atual, ARM64 nova é aceita e x86_64 não mudou
 #   nada.
 #
-#   NÃO prova nada numa VPS ARM de verdade: `docker`, `curl`, `crontab`, `psql`
+#   NÃO prova nada numa VPS de verdade: `docker`, `curl`, `crontab`, `psql`
 #   e `uname` são dublês, o repositório git é descartável (mktemp) e nenhum
 #   contêiner sobe. O que se prova é o CAMINHO DO SCRIPT, que é onde as duas
 #   mudanças se cruzavam.
@@ -201,7 +203,7 @@ rodar_update() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-echo '── 1. A DEFEITO: aarch64 numa instalação que JÁ EXISTE tem que alcançar a'
+echo '── 1. A RECUPERAÇÃO: riscv64 numa instalação que JÁ EXISTE alcança a'
 echo '      recuperação por build local, e não morrer na guarda do #1042'
 # É o relato da issue, palavra por palavra: um clone de ARM, com o CRM no ar,
 # e o `bash hostgator-setup-kit/update.sh` não passando de "Procurando
@@ -209,13 +211,13 @@ echo '      recuperação por build local, e não morrer na guarda do #1042'
 # o overlay de build foi MESMO executado, e o update terminou bem.
 R1="$WORK/caso1"; mkdir -p "$R1"; montar_instalacao "$R1" 0
 OUT1="$WORK/saida1.txt"
-rodar_update "$R1" aarch64 1 "$OUT1"; RC1="$RC"
+rodar_update "$R1" riscv64 1 "$OUT1"; RC1="$RC"
 check "o update.sh NÃO morre na guarda de arquitetura (o 'Procurando atualizações' aparece)" \
   grep -q 'Procurando atualizações' "$OUT1"
 check "a guarda em vez de recusar AVISA que a instalação já existe" \
   grep -q 'JÁ EXISTE' "$OUT1"
-check "a arquitetura encontrada é dita ao dono (aarch64)" \
-  grep -q 'aarch64' "$OUT1"
+check "a arquitetura encontrada é dita ao dono (riscv64)" \
+  grep -q 'riscv64' "$OUT1"
 # O update.sh relê o _common.sh depois do checkout (update.sh, passo 3), e a
 # guarda roda de novo no topo dele: sem a trava por processo, o mesmo aviso
 # saía duas vezes na mesma atualização.
@@ -231,29 +233,28 @@ check "e o serviço subiu pelo mesmo overlay" \
 check "a atualização terminou com o CRM no ar" \
   grep -q 'containers no ar\|Atualização concluída\|construídas aqui' "$OUT1"
 check "o update.sh saiu com 0 (rc=$RC1)" test "$RC1" -eq 0
-# O aviso da guarda não pode ser a recusa: a recusa do #1042 começa com '✖' e
-# manda usar VPS x86_64, e é a mensagem que o dono lia antes.
-check "a saída NÃO diz 'Use uma VPS x86_64/amd64' (a recusa do #1042)" \
-  nao_contem 'Use uma VPS x86_64/amd64' "$OUT1"
+# O aviso de recuperação não pode virar a recusa de uma instalação nova.
+check "a saída NÃO traz a recusa de instalação nova" \
+  nao_contem 'Use uma VPS x86_64/amd64 ou ARM64/aarch64' "$OUT1"
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo
-echo '── 2. A GUARDA DO #1042 CONTINUA: instalação NOVA em aarch64 é recusada'
+echo '── 2. A GUARDA CONTINUA: instalação NOVA numa arquitetura sem imagem é recusada'
 # Contrapeso obrigatório, e é o motivo de a guarda não ter sido removida: numa
 # instalação nova não existe build local para recuperar — não há imagem, não há
 # `.env`, e o `construir_aqui_e_subir` só é alcançado DEPOIS do provisionamento
 # do banco. O que muda é que a recusa volta a ser a do #1042, com a causa certa.
 R2="$WORK/caso2"; mkdir -p "$R2"; montar_instalacao "$R2" 1
 OUT2="$WORK/saida2.txt"
-rodar_update "$R2" aarch64 1 "$OUT2"; RC2="$RC"
-check "a instalação NOVA em ARM é recusada (rc=$RC2, e != 0)" test "$RC2" -ne 0
+rodar_update "$R2" riscv64 1 "$OUT2"; RC2="$RC"
+check "a instalação NOVA em riscv64 é recusada (rc=$RC2, e != 0)" test "$RC2" -ne 0
 check "a recusa diz qual arquitetura foi encontrada" \
-  grep -q 'aarch64' "$OUT2"
-check "a recusa diz qual é a imagem que existe hoje" \
-  grep -q 'linux/amd64' "$OUT2"
-check "a recusa orienta a VPS suportada (o texto do #1042, intacto)" \
-  grep -q 'Use uma VPS x86_64/amd64' "$OUT2"
-check "a instalação NOVA em ARM NÃO tenta construir imagens aqui" \
+  grep -q 'riscv64' "$OUT2"
+check "a recusa lista as arquiteturas publicadas" \
+  grep -q 'linux/amd64 e linux/arm64' "$OUT2"
+check "a recusa orienta a VPS suportada" \
+  grep -q 'Use uma VPS x86_64/amd64 ou ARM64/aarch64' "$OUT2"
+check "a instalação NOVA em arquitetura sem imagem NÃO tenta construir imagens aqui" \
   nao_contem '-f docker-compose.build.yml build' "$DOCKER_LOG"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -276,14 +277,14 @@ check "em x86_64 a atualização pullou a imagem do app" \
 # ─────────────────────────────────────────────────────────────────────────────
 echo
 echo '── 4. A DECISÃO, isolada: a função pura que decide'
-# As três respostas, sem `uname` e sem disco — é o que permite ao gate ler a
-# decisão sem montar instalação nenhuma, e cobre o limite: em amd64, existir ou
-# não uma instalação é a MESMA resposta.
+# As respostas, sem `uname` e sem disco — é o que permite ao gate ler a decisão
+# sem montar instalação nenhuma. amd64 e arm64 são nativas; só uma arquitetura
+# sem imagem depende de haver instalação anterior para recuperar.
 R4="$WORK/caso4"; mkdir -p "$R4"
 OUT4="$R4/veredito.txt"
 (
   . "$REPO_ROOT/hostgator-setup-kit/_common.sh"
-  for par in "x86_64 0" "amd64 1" "aarch64 0" "aarch64 1" "arm64 1" "riscv64 0"; do
+  for par in "x86_64 0" "amd64 1" "aarch64 0" "aarch64 1" "arm64 1" "riscv64 0" "riscv64 1"; do
     # shellcheck disable=SC2086
     set -- $par
     printf '%s %s → %s\n' "$1" "$2" "$(veredito_da_arquitetura "$1" "$2")"
@@ -293,21 +294,24 @@ check "amd64 (nova ou existente) → amd64" \
   grep -q '^x86_64 0 → amd64$' "$OUT4"
 check "amd64 em instalação existente também é amd64" \
   grep -q '^amd64 1 → amd64$' "$OUT4"
-check "aarch64 em instalação NOVA → nova (a recusa do #1042)" \
-  grep -q '^aarch64 0 → nova$' "$OUT4"
-check "aarch64 em instalação existente → recuperar" \
-  grep -q '^aarch64 1 → recuperar$' "$OUT4"
-check "arm64 em instalação existente → recuperar" \
-  grep -q '^arm64 1 → recuperar$' "$OUT4"
-check "outra arquitetura em instalação NOVA → nova" \
+check "aarch64 em instalação NOVA → arm64" \
+  grep -q '^aarch64 0 → arm64$' "$OUT4"
+check "aarch64 em instalação existente → arm64" \
+  grep -q '^aarch64 1 → arm64$' "$OUT4"
+check "arm64 em instalação existente → arm64" \
+  grep -q '^arm64 1 → arm64$' "$OUT4"
+check "arquitetura sem imagem em instalação NOVA → nova" \
   grep -q '^riscv64 0 → nova$' "$OUT4"
+check "arquitetura sem imagem em instalação existente → recuperar" \
+  grep -q '^riscv64 1 → recuperar$' "$OUT4"
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo
 echo '── 5. QUEM JÁ ESTÁ PRESO: o kit do disco é o da guarda velha, e o passo'
 echo '      único que o fragmento de release ensina tem de funcionar'
 # O update.sh dá `source` no _common.sh que está NO DISCO antes do checkout da
-# versão nova. Numa VPS ARM que já tem a guarda do #1042 (v1.35.0 em diante),
+# versão nova. Num kit antigo, uma VPS ARM ainda era bloqueada pela guarda
+# (#1042, v1.35.0 em diante),
 # esse kit velho morre no topo e nunca baixa este conserto — nem pelo terminal
 # nem pelo botão "Atualizar", que roda o mesmo update.sh. A saída é trocar o
 # código à mão uma vez e rodar o update.sh da versão nova. Este caso prova as
@@ -315,7 +319,7 @@ echo '      único que o fragmento de release ensina tem de funcionar'
 # publicado no fragmento `.changes/guarda-arm-nao-mata-a-recuperacao.md` a solta.
 #
 # O kit "velho" é o do próprio PR com a detecção de instalação desligada, que
-# é exatamente o comportamento da guarda do #1042: recusa ARM sem olhar nada.
+# é exatamente o comportamento da guarda antiga do #1042: recusa ARM sem olhar nada.
 R5="$WORK/caso5"; mkdir -p "$R5"; montar_instalacao "$R5" 0
 (
   cd "$R5/deskcommcrm" || exit 1
@@ -346,10 +350,10 @@ check "depois do checkout à mão, o update.sh da versão nova sai com 0 (rc=$RC
 check "e ele chega à recuperação por build local" \
   grep -q -- '-f docker-compose.build.yml build' "$DOCKER_LOG"
 
-printf '\nstatus: caso1(ARM+recuperação)=%s caso2(nova ARM)=%s caso3(amd64)=%s\n' \
+printf '\nstatus: caso1(arquitetura sem imagem+recuperação)=%s caso2(nova arquitetura sem imagem)=%s caso3(amd64)=%s\n' \
   "$RC1" "$RC2" "$RC3"
 if [ "$FAILS" -eq 0 ]; then
-  echo "OK — a guarda não mata a recuperação (#1266) e continua recusando a instalação nova (#1042)."
+  echo "OK — a guarda preserva a recuperação de arquiteturas sem imagem e aceita as arquiteturas publicadas."
 else
   echo "FALHOU — $FAILS prova(s)."
 fi

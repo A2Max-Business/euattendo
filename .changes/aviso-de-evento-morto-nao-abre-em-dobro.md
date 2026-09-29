@@ -10,4 +10,4 @@ O banco agora é quem segura a fila: um índice único parcial em `agent_inbox_i
 
 Kinds diferentes, organizações diferentes e as duas famílias do `event_dead` seguem gravando normalmente, em paralelo.
 
-Contribuição de @webtecnica (#880).
+Contribuição de @webtecnica (#1928).

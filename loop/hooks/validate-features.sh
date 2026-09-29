@@ -38,7 +38,25 @@ git diff --cached --name-only -- plan/features.json | grep -qx 'plan/features.js
 # ser IDÊNTICO ao do outro lado, isto é, zero autoria minha no arquivo. Falha
 # qualquer uma → cai na verificação de sempre. Sem a ref `origin/main`, merge
 # octopus ou blob ilegível, a condição é falsa e a guarda segue fechada.
-if outro_lado=$(git rev-parse -q --verify MERGE_HEAD) \
+#
+# ── De ONDE sai o outro lado no caminho LIMPO (#374) ──────────────────────────
+# O git chama o `pre-merge-commit` ANTES de gravar o `MERGE_HEAD` (medido pela
+# sonda do M3-PREMISSA), então naquele instante a referência ainda não existe e
+# esta guarda caía na verificação de sempre — punindo o merge inteiro como se a
+# main tivesse escrito o plano. O mesmo git entrega a outra ponta, NAQUELE
+# instante, em `GITHEAD_<sha>=<ref>`; é a MESMA fonte que o freeze-invariants
+# passou a usar na #374, com a mesma régua: uma ref só = um merge, duas ou mais
+# (octopus) = sem sinal conclusivo, `outro_lado` fica vazio e nada é inocentado.
+outro_lado=$(git rev-parse -q --verify MERGE_HEAD 2>/dev/null || true)
+if [ -z "$outro_lado" ]; then
+  githeads=$(env | sed -n 's/^\(GITHEAD_[0-9a-fA-F]\{40,\}\)=.*/\1/p' || true)
+  n_githeads=$(printf '%s' "$githeads" | grep -c . || true)
+  if [ "$n_githeads" = "1" ]; then
+    outro_lado=$(git rev-parse -q --verify "${githeads#GITHEAD_}" 2>/dev/null || true)
+  fi
+fi
+
+if [ -n "$outro_lado" ] \
   && git merge-base --is-ancestor "$outro_lado" origin/main 2>/dev/null \
   && [ "$(git rev-parse -q --verify ':plan/features.json' 2>/dev/null || echo ausente-no-indice)" \
      = "$(git rev-parse -q --verify "${outro_lado}:plan/features.json" 2>/dev/null || echo ausente-no-outro-lado)" ]; then

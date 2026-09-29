@@ -91,3 +91,64 @@ export async function ultimaInboundJaRespondida(
   );
   return rows[0]?.respondida === true;
 }
+
+/**
+ * RESPOSTA OBSOLETA — o cliente escreveu de novo enquanto este turno pensava.
+ *
+ * ## O defeito (medido numa VPS, 17–25/09/2026)
+ *
+ * 39% das respostas de um agente de oficina (232 de 589) saíram a menos de 3
+ * minutos de outra resposta ao mesmo cliente. O caso típico: "Oi" / "Boa tarde"
+ * / "Tudo bem?" com 4–5 s entre si, e a pergunta real 20 s depois. O turno lê a
+ * conversa no começo, leva 10–40 s no modelo e envia "Como posso te ajudar?" —
+ * com a pergunta já na conversa. O turno seguinte, que viu a pergunta, responde
+ * de novo. `ultimaInboundJaRespondida` (acima) não cala esse segundo turno, e
+ * está certo: o primeiro nunca viu a pergunta. O defeito está no PRIMEIRO envio,
+ * que sai desatualizado.
+ *
+ * ## A régua
+ *
+ * Existe inbound gravada DEPOIS de `ultima_inbound_vista_em` (a anotação que o
+ * turno fez antes de ler a conversa)? Então a resposta foi escrita sem ela, e a
+ * mensagem nova tem job próprio, que lê a conversa inteira e responde a tudo
+ * de uma vez. Este turno não envia.
+ *
+ * ## O teto
+ *
+ * Um cliente que escreve sem parar faria todo turno ficar obsoleto antes de
+ * enviar. Por isso a régua só vale enquanto a mensagem mais antiga sem resposta
+ * (desde a última outbound) tem menos de `tetoMs`: passado o teto, a resposta
+ * sai mesmo desatualizada — uma resposta atrasada é ruim, silêncio é pior.
+ * `tetoMs <= 0` desliga.
+ */
+export async function respostaFicouObsoleta(
+  db: Queryable,
+  alvo: Pick<AlvoDoTurno, 'organizationId' | 'conversationId' | 'jobId'>,
+  tetoMs: number,
+): Promise<boolean> {
+  if (!(tetoMs > 0)) return false;
+  const { rows } = await db.query<{ obsoleta: boolean }>(
+    `with vista as (
+       select (payload->>'ultima_inbound_vista_em')::timestamptz as em
+         from job_queue where organization_id = $1 and id = $3
+     ),
+     ultima_out as (
+       select max(created_at) as em from messages
+        where organization_id = $1 and conversation_id = $2 and direction = 'outbound'
+     ),
+     pendente as (
+       select min(m.created_at) as em from messages m cross join ultima_out o
+        where m.organization_id = $1 and m.conversation_id = $2 and m.direction = 'inbound'
+          and (o.em is null or m.created_at > o.em)
+     )
+     select exists (
+              select 1 from messages m cross join vista v
+               where m.organization_id = $1 and m.conversation_id = $2
+                 and m.direction = 'inbound' and v.em is not null and m.created_at > v.em
+            )
+            and coalesce((select em from pendente) > now() - ($4 * interval '1 millisecond'), false)
+            as obsoleta`,
+    [alvo.organizationId, alvo.conversationId, alvo.jobId, tetoMs],
+  );
+  return rows[0]?.obsoleta === true;
+}

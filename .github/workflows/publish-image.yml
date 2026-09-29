@@ -411,7 +411,7 @@ jobs:
             -e NEXT_PUBLIC_SUPABASE_URL=https://exemplo.supabase.co \
             -e NEXT_PUBLIC_SUPABASE_ANON_KEY=chave-de-mentira \
             -e SUPABASE_SERVICE_ROLE_KEY=chave-de-mentira \
-            -e SUPABASE_DB_URL=postgres://u:p@127.0.0.1:5432/postgres \
+            -e SUPABASE_DB_URL=postgres://127.0.0.1:5432/postgres \
             -e SENTRY_DSN=off \
             deskcomm-smoke:pr
 
@@ -724,7 +724,7 @@ jobs:
             -e NEXT_PUBLIC_SUPABASE_URL=https://exemplo.supabase.co \
             -e NEXT_PUBLIC_SUPABASE_ANON_KEY=chave-de-mentira \
             -e SUPABASE_SERVICE_ROLE_KEY=chave-de-mentira \
-            -e SUPABASE_DB_URL=postgres://postgres:postgres@127.0.0.1:5432/postgres \
+            -e SUPABASE_DB_URL=postgres://127.0.0.1:5432/postgres \
             -e SENTRY_DSN=off \
             deskcomm-worker:pr
 

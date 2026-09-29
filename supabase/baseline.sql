@@ -7297,26 +7297,10 @@ alter table followup_flow_pointers enable row level security;
 alter table followup_enrollments enable row level security;
 alter table followup_enrollment_events enable row level security;
 
-do $$ begin
-  create policy tenant_isolation_followup_flow_versions_all on followup_flow_versions
-    for all using (organization_id in (select fn_user_org_ids()))
-    with check (organization_id in (select fn_user_org_ids()));
-exception when duplicate_object then null; end $$;
-do $$ begin
-  create policy tenant_isolation_followup_flow_pointers_all on followup_flow_pointers
-    for all using (organization_id in (select fn_user_org_ids()))
-    with check (organization_id in (select fn_user_org_ids()));
-exception when duplicate_object then null; end $$;
-do $$ begin
-  create policy tenant_isolation_followup_enrollments_all on followup_enrollments
-    for all using (organization_id in (select fn_user_org_ids()))
-    with check (organization_id in (select fn_user_org_ids()));
-exception when duplicate_object then null; end $$;
-do $$ begin
-  create policy tenant_isolation_followup_enrollment_events_all on followup_enrollment_events
-    for all using (organization_id in (select fn_user_org_ids()))
-    with check (organization_id in (select fn_user_org_ids()));
-exception when duplicate_object then null; end $$;
+-- As policies `for all` das quatro tabelas saíram daqui: followup_flow_pointers e
+-- followup_enrollments na migration 0489 (issue #1913), followup_flow_versions e
+-- followup_enrollment_events na 0490 (issue #1915). As policies por operação estão nos
+-- apêndices delas.
 
 -- Claim atômico do worker (SKIP LOCKED) — service role only
 create or replace function fn_claim_due_followup_enrollments(p_limit int, p_lease_seconds int)
@@ -20632,6 +20616,17 @@ grant execute on function public.fn_appointment_enrollment_current(uuid,uuid,tex
 create or replace function public.fn_followup_generation_write()
 returns trigger language plpgsql security definer set search_path=public as $$
 begin
+ -- #1862 — DELETE que chega em CASCATA não é escrita de follow-up. Este gatilho
+ -- é BEFORE ROW: o DELETE vindo de `on delete cascade` roda sob o gatilho da
+ -- chave estrangeira, com `pg_trigger_depth() > 1`. Passa QUALQUER cascata, não
+ -- só a da ficha: apagar o contato, a inscrição (followup_enrollments), o fluxo
+ -- (followup_flow_pointers) ou a organização leva junto os registros internos.
+ -- O turno que sobra sem inscrição/evento falha fechado em
+ -- fn_followup_job_current. A profundidade não distingue cascata de DELETE
+ -- feito por outro gatilho: hoje nenhum gatilho apaga nestas duas tabelas, e
+ -- quem criar um herda esta passagem. O DELETE DIRETO (profundidade 1, com
+ -- `auth.uid()`) continua caindo na recusa abaixo — a 42501 não afrouxa.
+ if tg_op='DELETE' and pg_trigger_depth()>1 then return old; end if;
  if tg_table_name='job_queue' then
   if auth.uid() is not null and ((tg_op<>'DELETE' and new.kind='followup_turn') or (tg_op<>'INSERT' and old.kind='followup_turn')) then
    raise exception 'followup_job_internal' using errcode='42501';
@@ -36893,20 +36888,30 @@ begin
   drop policy if exists tenant_isolation_honorarios_contratos_all on public.honorarios_contratos;
 
   drop policy if exists honorarios_contratos_select on public.honorarios_contratos;
-  create policy honorarios_contratos_select on public.honorarios_contratos
+  -- Cada `create policy` deste corpo ocupa DUAS linhas de propósito (#1906).
+  -- O `update.sh` de v1.39.0 a v1.63.0 lê as regras do TEXTO deste arquivo
+  -- (nome da regra e tabela na MESMA linha do create), até dentro de corpo de
+  -- função, e cobrava estas 8 em instalação sem o módulo. Esse script antigo
+  -- é o que roda na atualização (fica no disco), então o conserto dele não
+  -- alcança quem atualiza: a forma do texto sim. Vigiado por
+  -- tests/unit/adr-0002-funcao-provisionadora.test.ts.
+  create policy honorarios_contratos_select
+    on public.honorarios_contratos
     for select using (
       organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()
     );
 
   drop policy if exists honorarios_contratos_insert on public.honorarios_contratos;
-  create policy honorarios_contratos_insert on public.honorarios_contratos
+  create policy honorarios_contratos_insert
+    on public.honorarios_contratos
     for insert
     with check (public.fn_is_platform_admin()
                 or (organization_id in (select public.fn_user_org_ids())
                     and public.fn_role_at_least(organization_id, 'manager')));
 
   drop policy if exists honorarios_contratos_update on public.honorarios_contratos;
-  create policy honorarios_contratos_update on public.honorarios_contratos
+  create policy honorarios_contratos_update
+    on public.honorarios_contratos
     for update
     using (public.fn_is_platform_admin()
            or (organization_id in (select public.fn_user_org_ids())
@@ -36916,7 +36921,8 @@ begin
                     and public.fn_role_at_least(organization_id, 'manager')));
 
   drop policy if exists honorarios_contratos_delete on public.honorarios_contratos;
-  create policy honorarios_contratos_delete on public.honorarios_contratos
+  create policy honorarios_contratos_delete
+    on public.honorarios_contratos
     for delete
     using ((public.fn_is_platform_admin()
             or (organization_id in (select public.fn_user_org_ids())
@@ -36929,13 +36935,15 @@ begin
   drop policy if exists tenant_isolation_honorarios_parcelas_all on public.honorarios_parcelas;
 
   drop policy if exists honorarios_parcelas_select on public.honorarios_parcelas;
-  create policy honorarios_parcelas_select on public.honorarios_parcelas
+  create policy honorarios_parcelas_select
+    on public.honorarios_parcelas
     for select using (
       organization_id in (select public.fn_user_org_ids()) or public.fn_is_platform_admin()
     );
 
   drop policy if exists honorarios_parcelas_insert on public.honorarios_parcelas;
-  create policy honorarios_parcelas_insert on public.honorarios_parcelas
+  create policy honorarios_parcelas_insert
+    on public.honorarios_parcelas
     for insert
     with check ((public.fn_is_platform_admin()
                  or (organization_id in (select public.fn_user_org_ids())
@@ -36946,7 +36954,8 @@ begin
                                and c.organization_id = honorarios_parcelas.organization_id));
 
   drop policy if exists honorarios_parcelas_update on public.honorarios_parcelas;
-  create policy honorarios_parcelas_update on public.honorarios_parcelas
+  create policy honorarios_parcelas_update
+    on public.honorarios_parcelas
     for update
     using ((public.fn_is_platform_admin()
             or (organization_id in (select public.fn_user_org_ids())
@@ -36961,7 +36970,8 @@ begin
                                and c.organization_id = honorarios_parcelas.organization_id));
 
   drop policy if exists honorarios_parcelas_delete on public.honorarios_parcelas;
-  create policy honorarios_parcelas_delete on public.honorarios_parcelas
+  create policy honorarios_parcelas_delete
+    on public.honorarios_parcelas
     for delete
     using ((public.fn_is_platform_admin()
             or (organization_id in (select public.fn_user_org_ids())
@@ -42695,6 +42705,288 @@ $$;
 revoke all on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) from public, anon, authenticated;
 grant execute on function public.fn_lgpd_cascade_redact_contact(uuid,uuid,uuid) to service_role;
 
+-- ---- as seções de módulo que a anonimização alcança (migration 0485) ----
+-- ⚠️ ENTRA ANTES do bloco da VARREDURA anon: cria função. Corpo IDÊNTICO ao da migration
+-- 0485 (gate `apendice-do-baseline-nao-diverge-da-cadeia` compara o que o Postgres executa).
+-- Idempotente: `if not exists`, `create or replace`, `drop trigger if exists`.
+-- 0485 — A anonimização de LGPD alcança as SEÇÕES DE MÓDULO declaradas (D8 da ADR-0002, #1114)
+--
+-- Lei: `docs/adr/0002-tabelas-de-modulo-num-banco-so.md`, D8:
+--   "Anonimização e retenção alcançam as tabelas do módulo por SQL dinâmico protegido por
+--    `to_regclass`: onde o módulo não está instalado, pulam sem erro. Uma cascata que citasse
+--    a tabela pelo nome abortaria a anonimização inteira em toda instalação sem o módulo —
+--    medido."
+--
+-- ── O que JÁ existe e o que este arquivo acrescenta ──────────────────────────────────────────
+-- A cascata `fn_lgpd_cascade_redact_contact` continua sendo a função única do NÚCLEO (0119 →
+-- 0482), e a exportação já trata o módulo ausente: `lib/lgpd/export-collector.ts` engole só o
+-- 42P01 ("relation does not exist") e LANÇA para todo outro erro, porque seção de módulo
+-- ilegível nunca sai como export completo (D8, parte de export, 0480/#1578).
+--
+-- O que faltava era o mecanismo GENÉRICO da D8: um módulo declara as SUAS seções UMA vez, e a
+-- anonimização as alcança sem que a cascata ganhe um passo novo a cada módulo. Sem isto, o
+-- próximo módulo com texto livre sobre a pessoa só ficaria alcançado se alguém lembrasse de
+-- reescrever uma função de ~400 linhas — e o esquecimento, em LGPD, é o modo de falha silencioso
+-- (rota devolve SUCESSO, SLA cumprido, linha legível).
+--
+-- ── As três peças ─────────────────────────────────────────────────────────────────────────────
+-- 1. `modulo_secoes_lgpd` — o módulo declara `(modulo, tabela, ligacao, colunas, colunas_rotulo)`.
+--    Escrito só pela migration do módulo: RLS ligada, zero policy, `anon`/`authenticated` sem
+--    privilégio (mesmo desenho de `modulos_instalados`, 0340). Nenhum módulo oficial declara
+--    linha hoje — honorários não tem texto livre sobre a pessoa (decisão escrita na 0480) —, e a
+--    tabela nasce VAZIA de propósito: não se inventa dado de LGPD para um módulo que não pediu.
+-- 2. `fn_lgpd_redigir_secoes_de_modulo()` — gatilho `after update of is_anonymized` em
+--    `contacts`, a MESMA porta das 0174/0184/0210/0391: a virada `false → true` é por onde os
+--    DOIS caminhos de anonimização passam (a cascata e `fn_lgpd_anonymize_contact`), então não
+--    há caminho que escape por construção.
+-- 3. O `to_regclass` antes de CADA seção — módulo não instalado = tabela ausente = `continue`,
+--    sem erro, em qualquer instalação. É literalmente o que a ADR pede e o que a cascata
+--    nomeada por tabela não pode dar.
+--
+-- ── Por que SECURITY DEFINER sem parâmetro (D4) ───────────────────────────────────────────────
+-- O gatilho roda com a sessão de quem atualizou `contacts`; sem `definer`, um caminho que
+-- atualiza como `authenticated` não teria permissão de escrever na tabela de outro módulo por
+-- cima da RLS. Sem PARÂMETRO nenhum (nada de tabela, SQL ou organização vindo de fora), o efeito
+-- é fixo e conhecido: a mesma argumentação da D4 para a provisionadora. `execute` revogado de
+-- `public`, `anon` e `authenticated` — gatilho não precisa de grant para disparar, e sem argumento
+-- de organização esta função fica fora da régua de `definer-membership-varredura` por construção.
+--
+-- ── Coluna declarada que não existe: ERRO ALTO, não redação pela metade ──────────────────────
+-- Declaração errada da migration do módulo levanta `modulo_secao_invalida` nomeando módulo e
+-- tabela. Silenciar aqui seria entregar ANONIMIZAÇÃO COM SUCESSO com a pessoa legível — o mesmo
+-- modo de falha que a LGPD não tolera em lugar nenhum. O invariante da D8 mede os dois lados.
+--
+-- Reaplicável (tripla da casa): `if not exists`, `create or replace`, `drop trigger if exists`.
+-- O apêndice do `baseline.sql` entra ANTES do bloco da `VARREDURA anon` (0116), que proíbe
+-- `create function` depois dela — ver `tests/unit/varredura-anon-e-o-ultimo-bloco.test.ts`.
+
+create table if not exists public.modulo_secoes_lgpd (
+  modulo text not null check (modulo ~ '^[a-z][a-z0-9_]{1,40}$'),
+  tabela text not null check (tabela ~ '^[a-z][a-z0-9_]{1,40}$'),
+  -- Predicado que liga a linha da tabela ao contato, com $1 = organization_id e
+  -- $2 = contact_id. Vai para o `execute` via `using`: nenhum valor de contato entra no texto.
+  ligacao text not null,
+  colunas text[] not null default '{}'::text[],
+  colunas_rotulo text[] not null default '{}'::text[],
+  primary key (modulo, tabela)
+);
+comment on table public.modulo_secoes_lgpd is
+  'Seções de LGPD que um MÓDULO opcional declara (ADR-0002, D8). Escrito só pela migration do módulo; fn_lgpd_redigir_secoes_de_modulo lê com to_regclass e PULA a seção cuja tabela não existe (módulo não instalado).';
+
+alter table public.modulo_secoes_lgpd enable row level security;
+-- Fechada também para `service_role`: o gatilho abaixo é `definer` de dono `postgres` e
+-- executa o `tabela`/`ligacao` gravados aqui, e o default ACL daria GRANT ALL a ele.
+revoke all on public.modulo_secoes_lgpd from public, anon, authenticated, service_role;
+
+create or replace function public.fn_lgpd_redigir_secoes_de_modulo()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $f$
+declare
+  s record;
+  v_rel oid;
+  v_sets text;
+  v_nulos text;
+  v_rotulos text;
+  v_rotulo text := 'Cliente Anonimizado #' || substring(new.id::text from 1 for 8);
+begin
+  -- O gatilho já tem `when (new.is_anonymized and not old.is_anonymized)`, e a guarda aqui é a
+  -- mesma: uma função que também serve de alvo de `execute` não deve depender do chamador.
+  if not (new.is_anonymized and not old.is_anonymized) then
+    return null;
+  end if;
+
+  for s in
+    select modulo, tabela, ligacao, colunas, colunas_rotulo
+      from public.modulo_secoes_lgpd
+     order by modulo, tabela
+  loop
+    v_rel := to_regclass(format('public.%I', s.tabela));
+
+    -- D8, o ponto central: módulo não instalado não existe aqui, e a anonimização de um
+    -- contato NUNCA pode falhar por causa de módulo que ninguém ligou.
+    if v_rel is null then
+      continue;
+    end if;
+
+    if btrim(s.ligacao) = '' or (cardinality(s.colunas) = 0 and cardinality(s.colunas_rotulo) = 0) then
+      raise exception 'modulo_secao_invalida: %/% declara ligação vazia ou sem coluna', s.modulo, s.tabela;
+    end if;
+
+    if exists (
+      select 1
+        from unnest(s.colunas || s.colunas_rotulo) as c(coluna)
+       where not exists (
+         select 1
+           from pg_attribute a
+          where a.attrelid = v_rel
+            and a.attname = c.coluna
+            and a.attnum > 0
+            and not a.attisdropped
+       )
+    ) then
+      raise exception 'modulo_secao_invalida: %/% tem coluna declarada que não existe', s.modulo, s.tabela;
+    end if;
+
+    select string_agg(format('%I = null', c), ', ' order by c) into v_nulos
+      from unnest(s.colunas) as c;
+    select string_agg(format('%I = %L', c, v_rotulo), ', ' order by c) into v_rotulos
+      from unnest(s.colunas_rotulo) as c;
+    v_sets := concat_ws(', ', v_nulos, v_rotulos);
+
+    -- SQL dinâmico: o NOME da tabela vem da declaração (e já passou pelo to_regclass acima),
+    -- o predicado vai literal e os dois valores entram por `using`.
+    execute format('update public.%I set %s where (%s)', s.tabela, v_sets, s.ligacao)
+      using new.organization_id, new.id;
+  end loop;
+
+  return null;
+end $f$;
+
+revoke execute on function public.fn_lgpd_redigir_secoes_de_modulo() from public, anon, authenticated;
+
+drop trigger if exists trg_lgpd_secoes_de_modulo on public.contacts;
+create trigger trg_lgpd_secoes_de_modulo
+  after update of is_anonymized on public.contacts
+  for each row
+  when (new.is_anonymized and not old.is_anonymized)
+  execute function public.fn_lgpd_redigir_secoes_de_modulo();
+
+-- ---- Exclusão de contato com turno de follow-up: ficha inteira (migration 0488) ----
+-- Issue #1862: a rota apagava `messages`, `conversations` e `contacts` em três
+-- chamadas separadas, e o `contacts` era recusado com 42501 pelo gatilho de
+-- follow-up quando a ficha tinha turno — histórico apagado, ficha ficando.
+-- A função nova abaixo é a chamada ÚNICA que a rota passa a fazer: as três
+-- saem numa transação só. SECURITY INVOKER de propósito, como os três DELETE
+-- separados que ela substitui: a RLS de quem chama continua valendo, e
+-- `p_organization_id` fecha a linha por dentro — sem service role.
+-- O conserto da outra metade (a guarda do gatilho, `pg_trigger_depth() > 1`)
+-- está no bloco da 0224, EDITADO NO LUGAR, porque é a MESMA função.
+create or replace function public.fn_apagar_contato_com_historico(
+  p_contact_id uuid,
+  p_organization_id uuid
+)
+returns boolean
+language plpgsql
+volatile
+security invoker
+set search_path to 'public', 'pg_temp'
+as $$
+begin
+  -- RESTRICT da #752: o histórico sai antes da ficha, na mesma transação.
+  delete from public.messages
+   where contact_id = p_contact_id
+     and organization_id = p_organization_id;
+
+  delete from public.conversations
+   where contact_id = p_contact_id
+     and organization_id = p_organization_id;
+
+  delete from public.contacts
+   where id = p_contact_id
+     and organization_id = p_organization_id;
+
+  -- `found` é do DELETE da ficha: false = a ficha não estava acessível para quem
+  -- chamou (outra organização, RLS, corrida) — a rota devolve 404 nesse caso.
+  return found;
+end;
+$$;
+
+-- Função nova em `public` nasce exposta (ALTER DEFAULT PRIVILEGES do dump):
+-- o revoke tira anon e o grant deixa só quem a rota usa.
+revoke execute on function public.fn_apagar_contato_com_historico(uuid, uuid) from public, anon;
+grant  execute on function public.fn_apagar_contato_com_historico(uuid, uuid) to authenticated, service_role;
+
+notify pgrst, 'reload schema';
+
+-- ---- followup_enrollments e followup_flow_pointers: RLS por operação (migration 0489) ----
+-- A policy `for all` sem papel mínimo deixava `viewer` apagar inscrição e fluxo pelo PostgREST,
+-- e a cascata levava turnos e trilha (issue #1913; o PR #1912 abriria o buraco inteiro).
+-- Escrita = `manager`, como as rotas. Não cria função. Corpo e porquê: a migration 0489.
+
+drop policy if exists tenant_isolation_followup_enrollments_all on public.followup_enrollments;
+
+drop policy if exists followup_enrollments_select on public.followup_enrollments;
+create policy followup_enrollments_select on public.followup_enrollments
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+drop policy if exists followup_enrollments_insert on public.followup_enrollments;
+create policy followup_enrollments_insert on public.followup_enrollments
+  for insert
+  with check (organization_id in (select public.fn_user_org_ids())
+              and public.fn_role_at_least(organization_id, 'manager'));
+
+drop policy if exists followup_enrollments_update on public.followup_enrollments;
+create policy followup_enrollments_update on public.followup_enrollments
+  for update
+  using (organization_id in (select public.fn_user_org_ids())
+         and public.fn_role_at_least(organization_id, 'manager'))
+  with check (organization_id in (select public.fn_user_org_ids())
+              and public.fn_role_at_least(organization_id, 'manager'));
+
+drop policy if exists followup_enrollments_delete on public.followup_enrollments;
+create policy followup_enrollments_delete on public.followup_enrollments
+  for delete
+  using (organization_id in (select public.fn_user_org_ids())
+         and public.fn_role_at_least(organization_id, 'manager'));
+
+drop policy if exists tenant_isolation_followup_flow_pointers_all on public.followup_flow_pointers;
+
+drop policy if exists followup_flow_pointers_select on public.followup_flow_pointers;
+create policy followup_flow_pointers_select on public.followup_flow_pointers
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+drop policy if exists followup_flow_pointers_insert on public.followup_flow_pointers;
+create policy followup_flow_pointers_insert on public.followup_flow_pointers
+  for insert
+  with check (organization_id in (select public.fn_user_org_ids())
+              and public.fn_role_at_least(organization_id, 'manager'));
+
+drop policy if exists followup_flow_pointers_update on public.followup_flow_pointers;
+create policy followup_flow_pointers_update on public.followup_flow_pointers
+  for update
+  using (organization_id in (select public.fn_user_org_ids())
+         and public.fn_role_at_least(organization_id, 'manager'))
+  with check (organization_id in (select public.fn_user_org_ids())
+              and public.fn_role_at_least(organization_id, 'manager'));
+
+drop policy if exists followup_flow_pointers_delete on public.followup_flow_pointers;
+create policy followup_flow_pointers_delete on public.followup_flow_pointers
+  for delete
+  using (organization_id in (select public.fn_user_org_ids())
+         and public.fn_role_at_least(organization_id, 'manager'));
+
+-- ---- followup_enrollment_events e followup_flow_versions: RLS por operação (migration 0490) ----
+-- A policy `for all` sem papel mínimo deixava `viewer` apagar ou reescrever a trilha de uma
+-- inscrição e as versões de um fluxo pelo PostgREST (issue #1915). Escrita só onde uma rota
+-- escreve pela sessão (`manager`); o resto fica com o motor. Corpo e porquê: a migration 0490.
+
+drop policy if exists tenant_isolation_followup_enrollment_events_all on public.followup_enrollment_events;
+
+drop policy if exists followup_enrollment_events_select on public.followup_enrollment_events;
+create policy followup_enrollment_events_select on public.followup_enrollment_events
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+drop policy if exists followup_enrollment_events_insert on public.followup_enrollment_events;
+create policy followup_enrollment_events_insert on public.followup_enrollment_events
+  for insert
+  with check (organization_id in (select public.fn_user_org_ids())
+              and public.fn_role_at_least(organization_id, 'manager'));
+
+drop policy if exists tenant_isolation_followup_flow_versions_all on public.followup_flow_versions;
+
+drop policy if exists followup_flow_versions_select on public.followup_flow_versions;
+create policy followup_flow_versions_select on public.followup_flow_versions
+  for select using (organization_id in (select public.fn_user_org_ids()));
+
+drop policy if exists followup_flow_versions_delete on public.followup_flow_versions;
+create policy followup_flow_versions_delete on public.followup_flow_versions
+  for delete
+  using (organization_id in (select public.fn_user_org_ids())
+         and public.fn_role_at_least(organization_id, 'manager'));
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -43924,6 +44216,161 @@ comment on column public.knowledge_searches.author_kind is
   'Quem perguntou: ''ai'' = turno do agente ou a ferramenta MCP crm_search_knowledge; ''human'' = o operador na tela "Perguntar ao acervo" (F1 da #1869). Vocabulário da 0281.';
 comment on column public.knowledge_searches.author_user_id is
   'Operador que perguntou no caminho humano. null no caminho do agente, e também quando a pessoa sai do sistema — on delete set null preserva a pergunta, por isso não há check acoplando esta coluna à author_kind.';
+-- ---- playbook `agendamento` v3: a cadeia de dois passos (migration 0486) ----
+do $pub$
+declare
+  -- md5 do corpo abaixo. Conferido logo após o insert — ver item 2 do cabeçalho.
+  v_md5 constant text := '73c66800b7d64797252795b708b26cb3';
+  v_id  uuid;
+begin
+  select id into v_id
+    from skill_versions
+   where organization_id is null and name = 'agendamento' and md5(body) = v_md5
+   limit 1;
+
+  if v_id is null then
+    insert into skill_versions (organization_id, name, description, body, matcher)
+    values (
+      null,
+      'agendamento',
+      'Playbook pra marcar/remarcar horário (consulta, visita, sessão) — consulta a agenda real em dois passos (tipos e depois horários) pelas ferramentas quando elas existem, nunca inventa disponibilidade, e confirma por escrito antes de fechar.',
+      $body$# Playbook: marcar horário/agendamento
+
+## Quando usar
+O lead pede pra marcar um horário, consulta, visita, demonstração ou sessão —
+qualquer compromisso com data/hora. Comum em clínicas, imobiliárias (visitas),
+serviços e consultorias.
+
+## Regra de ouro: consulte a agenda, não adivinhe
+Você tem acesso à agenda **se, e somente se**, a ferramenta `crm_find_free_slots`
+estiver disponível para você. Não julgue isso por intuição — chame e leia a resposta.
+Se `crm_list_event_types` também estiver na sua mão, a consulta é de DOIS passos, e os
+dois no MESMO TURNO: ela devolve os tipos de atendimento da empresa com o `slug` de cada
+um, e só então `crm_find_free_slots` consulta horários DESSE tipo, com o `event_type_slug`
+que veio da lista. Parar depois da lista e responder "vou verificar" é o defeito — a lista
+é o começo da conversa com a agenda, não a resposta. Nunca invente nem traduza um `slug`:
+se o tipo que o lead pediu não está na lista, diga o que existe em vez de verificar o que
+não existe.
+- Voltou com horários → ofereça 2 ou 3 deles, concretos.
+- Voltou `publicou_horarios: false` → o atendente ainda não publicou os horários de
+  trabalho dele. Isso NÃO é "está lotado" e NÃO é "não tem vaga": não invente horário,
+  não diga que a agenda está cheia, e avise que alguém da equipe confirma.
+- Voltou com `motivo` → leia a `mensagem` e faça o que ela manda. Ela foi escrita para
+  o cliente ouvir.
+- Voltou `fuso_suposto: true` → o fuso da agenda veio do padrão e ninguém confirmou.
+  Ofereça pedindo confirmação — "consigo terça às 14h; confere se esse horário bate aí
+  pra você?" — em vez de afirmar.
+- Você não tem essa ferramenta → aí sim: não ofereça horário nenhum, diga que vai
+  confirmar a disponibilidade e sinalize handoff para quem tem acesso.
+Prometer um horário que depois não existe quebra confiança e gera reagendamento
+forçado. Inventar é pior do que demorar um instante a mais para responder.
+
+## Fluxo padrão (if-then)
+
+**1. Identifique o serviço/motivo antes de oferecer horário**
+- SE o lead só disse "quero agendar" sem contexto → pergunte o motivo/serviço
+  primeiro. Agendar sem saber o quê gera erro de encaixe (ex.: consulta de 20min
+  marcada num slot de 1h de procedimento).
+- SE você ainda não tem o `slug` desse serviço e `crm_list_event_types` está na sua mão →
+  chame-a e escolha o tipo pelo que o lead descreveu; é dela que sai o `event_type_slug` do
+  passo seguinte.
+
+**2. Ofereça opções fechadas, não uma pergunta aberta**
+- SE o tipo já está na lista mas horário nenhum foi consultado ainda → chame
+  `crm_find_free_slots` com o `event_type_slug` dele ANTES de responder.
+- SE `crm_find_free_slots` respondeu com horários → ofereça 2-3 concretos ("tenho terça
+  14h ou quarta 10h, qual funciona?"). Pergunta aberta tipo "qual horário você prefere?"
+  gera ida e volta desnecessária e trava a conversa.
+- SE você não tem a ferramenta → não invente. Diga algo como "vou confirmar a
+  disponibilidade e te retorno em instantes" e sinalize handoff/task pra quem tem
+  acesso.
+
+**3. Colete os dados obrigatórios antes de confirmar**
+- Nome completo do lead (ou confirme o que já está no CRM).
+- Serviço/motivo específico.
+- Unidade/local, se o tenant tiver mais de uma (clínica com filiais, imobiliária com
+  múltiplos imóveis).
+- Se for reagendamento, o horário anterior a ser substituído.
+
+**4. Confirme por escrito antes de encerrar**
+- SE o lead escolheu um horário e `crm_book_appointment` está na sua mão → grave de verdade
+  com ela, usando o `starts_at` que `crm_find_free_slots` devolveu, sem reescrever, e SÓ ENTÃO
+  repita por escrito. Horário oferecido e não marcado não é reserva — é ele que gera
+  reagendamento forçado.
+- SE o lead aceitar um horário → repita de volta por escrito: "Confirmado:
+  [serviço] dia [data] às [hora], em [local]. Confirma pra mim?"
+- Só considere o agendamento fechado depois do "sim"/confirmação explícita do lead —
+  silêncio ou "ok" vago não é confirmação suficiente pra compromissos com custo de
+  no-show alto (ex. consulta médica, visita a imóvel).
+
+**5. Reagendamento e cancelamento**
+- SE o lead pedir pra remarcar E você tem `crm_reschedule_appointment` → use ela.
+  NÃO cancele e marque de novo: é o MESMO compromisso mudando de hora. O histórico
+  continua um só e o lembrete é refeito sozinho para o horário novo.
+- SE o lead pedir pra remarcar e você NÃO tem essa ferramenta → então cancelar e marcar
+  de novo é o único caminho, e ele tem um custo que você precisa administrar: o cliente
+  pode receber dois avisos seguidos e contraditórios ("desmarcado" e depois "marcado").
+  Antes de fazer, diga a ele em uma frase o que vai acontecer — "vou desmarcar o horário
+  antigo e já marcar o novo, você pode receber dois avisos" — e nunca deixe os dois
+  compromissos de pé ao mesmo tempo.
+- SE o lead pedir pra cancelar → use `crm_cancel_appointment` se você a tiver, informe o
+  motivo, e pergunte se quer remarcar pra outra data, sem pressionar. Cancelar libera
+  aquele horário para outra pessoa e não dá para desfazer: confirme antes.
+
+**6. Risco de no-show**
+- Se o negócio tiver política de confirmação D-1 documentada na base de
+  conhecimento, siga-a (ex.: mensagem de lembrete automática). Se não houver, não
+  invente política — apenas confirme o agendamento normalmente.
+
+## Regras duras
+- Nunca confirme horário sem ter checado disponibilidade real (ou sem sinalizar que
+  ainda vai confirmar).
+- Nunca marque dois compromissos conflitantes pro mesmo lead sem avisar.
+- Se o lead pedir um horário fora do funcionamento do negócio (ex. domingo,
+  madrugada) e isso não estiver nas regras do tenant, não confirme — explique a
+  janela real de atendimento.
+- Dado sensível (endereço completo, documento) só é coletado se o fluxo do tenant
+  realmente exigir — não peça informação a mais que o agendamento precisa.
+- Marcar consulta e agendar retorno são coisas DIFERENTES. `crm_book_appointment` é para
+  hora combinada COM o cliente, que ele reservou e vai comparecer — alguém espera por ele.
+  `crm_schedule_followup` é decisão interna nossa de voltar a falar: o cliente não fica
+  sabendo e nada é reservado na agenda de ninguém. Se ele ESCOLHEU um horário para ser
+  atendido, é a primeira.
+
+## Exemplos de resposta (tom, não copiar literal)
+- "Pra eu te encaixar certo: é pra qual serviço/motivo?"
+- "Tenho quinta às 15h ou sexta às 9h — qual fica melhor pra você?"
+- "Confirmado: consulta dia 28/07 às 15h, na unidade Centro. Pode confirmar pra
+  mim?"
+
+## O que NÃO fazer
+- Não pergunte "qual horário você prefere?" sem oferecer opções concretas quando
+  você tem a agenda.
+- Não confirme agendamento sem resposta explícita do lead.
+- Não invente disponibilidade que você não checou.$body$,
+      '{"any_keywords": ["agendar", "marcar horário", "marcar consulta", "marcar uma visita", "agenda", "que horas vocês", "horário disponível", "remarcar", "reagendar", "cancelar o horário", "desmarcar"], "probe_keywords": ["que horas", "qual dia", "tem vaga", "disponibilidade"]}'::jsonb
+    )
+    returning id into v_id;
+
+    if (select md5(body) from skill_versions where id = v_id) is distinct from v_md5 then
+      raise exception 'playbook agendamento: o md5 declarado (%) nao corresponde ao corpo inserido. Recalcule antes de publicar.', v_md5;
+    end if;
+  end if;
+
+  -- Repointe SEMPRE. O ponteiro global e unico por nome (uniq_skill_pointers_platform,
+  -- parcial em organization_id is null), entao update-senao-insert e seguro e nao depende
+  -- de inferencia de conflito sobre indice parcial.
+  update skill_pointers
+     set version_id = v_id, updated_at = now()
+   where organization_id is null and name = 'agendamento';
+
+  if not found then
+    insert into skill_pointers (organization_id, name, version_id)
+    values (null, 'agendamento', v_id);
+  end if;
+end
+$pub$;
+
 -- ---- dedupe de event_dead atômico: índice único parcial (migration 0491) ----
 -- 0491 — o aviso `event_dead` não abre em dobro com dois drenos concorrentes
 -- (issue #880). O dedupe era uma pergunta seguida de uma escrita: `lib/event-log/
@@ -43965,4 +44412,3 @@ update public.agent_inbox_items i
 create unique index if not exists agent_inbox_event_dead_aberto_unico
   on public.agent_inbox_items (organization_id, kind, title)
   where status = 'open' and kind = 'event_dead';
-

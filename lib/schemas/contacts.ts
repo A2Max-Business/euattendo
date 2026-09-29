@@ -90,7 +90,20 @@ export function contactCreateSchemaDoPais(perfil: PerfilDoPais) {
       .string()
       .refine(perfil.documento.valida, perfil.documento.mensagemInvalido)
       .optional(),
+    phone_number: telefoneDoPais(perfil),
   });
+}
+
+/**
+ * O E.164 é universal; o EXEMPLO não. A mensagem de erro cravava
+ * `+5511999998888`, então a tela mostrava o exemplo do país no campo e ensinava
+ * o DDI brasileiro assim que a pessoa errava — dentro do mesmo formulário.
+ */
+function telefoneDoPais(perfil: PerfilDoPais) {
+  return z
+    .string()
+    .regex(PHONE_REGEX, `Telefone deve estar em formato E.164 (${perfil.telefoneExemplo})`)
+    .optional();
 }
 
 /** O mesmo, para o PATCH (`app/api/v1/contacts/[id]/route.ts`). */
@@ -100,6 +113,7 @@ export function contactPatchSchemaDoPais(perfil: PerfilDoPais) {
       .string()
       .refine(perfil.documento.valida, perfil.documento.mensagemInvalido)
       .optional(),
+    phone_number: telefoneDoPais(perfil),
   });
 }
 

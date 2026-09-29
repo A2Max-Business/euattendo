@@ -156,6 +156,18 @@ describe("o documento e o exemplo de telefone seguem o país da organização", 
     await waitFor(() => expect(api.post).toHaveBeenCalled());
   });
 
+  it("e o erro de telefone ensina o DDI do país, não o do Brasil", async () => {
+    orgAtiva.atual = { currency: "EUR", country: "XI" };
+    const usuario = userEvent.setup();
+    render(<NewContactDialog open onOpenChange={() => {}} />);
+
+    await usuario.type(screen.getByLabelText(/Telefone/i), "912345678");
+    await usuario.click(screen.getByRole("button", { name: /Criar contato/i }));
+
+    expect(await screen.findByText(/\+999123456789/)).toBeTruthy();
+    expect(screen.queryByText(/\+5511999998888/)).toBeNull();
+  });
+
   it("sem país declarado, vale o Brasil — nada muda para quem já usa", () => {
     orgAtiva.atual = { currency: "BRL", country: null };
     render(<NewContactDialog open onOpenChange={() => {}} />);

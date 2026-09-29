@@ -169,7 +169,7 @@ export function SkillsClient({ initialState }: Props) {
                       <span className="flex items-center gap-1.5 text-text">
                         <Info className="shrink-0" aria-hidden />
                         {t(
-                          "Há uma versão nova do modelo deste skill no catálogo. Adote para usar a mais recente — a sua edição não é reescrita, a nova versão vira a ativa.",
+                          "Há uma versão nova desta skill no catálogo. Ao adotar, ela passa a ser a ativa; a versão atual continua no Histórico de versões e pode ser restaurada.",
                         )}
                       </span>
                       {canManage && (

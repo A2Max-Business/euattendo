@@ -12,4 +12,4 @@ O corpo publicado agora ensina a cadeia inteira: primeiro `crm_list_event_types`
 
 Todo nome de ferramenta novo entra **dentro de uma condição** ("se `crm_list_event_types` também estiver na sua mão", "se você não tem a ferramenta"). Este texto é da organização inteira e chega por palavra-chave, sem saber quais capacidades o agente tem ligadas — e o desfecho de quem não tem a ferramenta continua sendo o mesmo: não inventar horário e sinalizar para a equipe. Quem já instala recebe o corpo novo pela migration `0486`; instalação nova recebe pelo `baseline.sql`. Nenhuma ação é necessária.
 
-Contribuição de @webtecnica (#1019).
+Contribuição de @webtecnica (#1922).

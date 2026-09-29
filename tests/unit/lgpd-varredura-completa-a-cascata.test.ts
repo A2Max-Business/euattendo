@@ -438,7 +438,9 @@ describe("a unidade que as duas bocas compartilham", () => {
     // Estado FINAL, não só a intenção — nada das quatro fontes guarda PII.
     expect(alvo.linhas.find((l) => l.id === "lead_notes:1")!.headline).toBe(NOTA_REDIGIDA);
     expect(alvo.linhas.find((l) => l.id === "lead_notes:1")!.body).toBe(NOTA_REDIGIDA);
-    expect(alvo.linhas.find((l) => l.id === "ai_agent_runs:1")!.tool_calls).toEqual([{ redacted: true }]);
+    expect(alvo.linhas.find((l) => l.id === "ai_agent_runs:1")!.tool_calls).toEqual([
+      { tool_name: "crm_buscar_contato", redacted: true, tool_calls: [] },
+    ]);
     expect(alvo.linhas.find((l) => l.id === "lead_state:1")!.next_action).toBeNull();
     expect(alvo.linhas.find((l) => l.id === "lead_state:1")!.qualification).toEqual({});
   });
@@ -478,6 +480,42 @@ describe("a unidade que as duas bocas compartilham", () => {
 
     expect(segunda.completados, "a segunda passada redigiu de novo o que já estava redigido").toEqual([]);
     expect(alvo.escritas.length, "rescreveu as fontes novas na segunda passada").toBe(escritasDaPrimeira);
+  });
+
+  it("⭐ tool_calls redigido guarda QUAIS ferramentas rodaram e apaga o que a pessoa disse (#1957)", async () => {
+    // A forma real (lib/ai/runtime/serialize.ts): passos com o texto do modelo e
+    // chamadas com argumentos e resultado. Apagar tudo apagaria também a trilha
+    // de quais ferramentas o agente usou — que não identifica ninguém.
+    alvo = banco([
+      contatoAnonimizado(),
+      {
+        id: "ai_agent_runs:1",
+        organization_id: ORG,
+        contact_id: "contacts:a",
+        tool_calls: [
+          {
+            step: 0,
+            text: "Oi Maria, vou buscar seu pedido",
+            finish_reason: "tool-calls",
+            tokens_in: 10,
+            tokens_out: 5,
+            tool_calls: [
+              { tool_name: "crm_buscar_contato", args: { termo: "Maria Souza" }, result: { telefone: "5511999999999" } },
+            ],
+          },
+          { step: 1, text: "Pronto, Maria", tool_calls: [] },
+        ],
+      },
+    ]);
+
+    await varrerRedacoesIncompletas(alvo.cliente);
+
+    const run = alvo.linhas.find((l) => l.id === "ai_agent_runs:1")!;
+    expect(run.tool_calls).toEqual([
+      { step: 0, redacted: true, tool_calls: [{ tool_name: "crm_buscar_contato" }] },
+      { step: 1, redacted: true, tool_calls: [] },
+    ]);
+    expect(JSON.stringify(run.tool_calls), "sobrou texto da pessoa no registro da run").not.toMatch(/Maria|5511/);
   });
 
   it("⭐ run com tool_calls vazio de nascença não é reescrita (#1957)", async () => {

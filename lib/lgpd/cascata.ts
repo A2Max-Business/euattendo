@@ -105,20 +105,41 @@ export interface ClienteDaCascata {
 export const NOTA_REDIGIDA = "(anonimizado)";
 
 /**
- * Idempotência das novas fontes (issue #1957). O `tool_calls` de uma run que
- * NUNCA chamou ferramenta é `[]` de nascença, então não dá para usar o vácuo
- * como marcador de "já redigida": um array vazio legítimo e um redigido seriam
- * indistinguíveis. O que tornaria a varredura diária reescrever para sempre a
- * run que já está certa — escrever sem efeito, com a auditoria registrando
- * "efeito" que não houve.
+ * Redação do `tool_calls` de uma run (issue #1957). Cada passo vira
+ * `{ step?, tool_name?, redacted: true, tool_calls: [{ tool_name }] }`: fica
+ * QUAIS ferramentas rodaram e em que passo — a trilha do que o agente fez —, e
+ * sai o texto do modelo, os argumentos e os resultados, que é onde mora o nome
+ * e o que a pessoa escreveu (forma em `lib/ai/runtime/serialize.ts`).
  *
- * Em vez disso o marcador esconde a DISTINÇÃO no próprio dado: redigir a run
- * significa trocar o conteúdo por este array-sentinela, e "já redigida" vira
- * `tool_calls` com EXATAMENTE este valor. Um array vazio de nascença tem
- * `length === 0` e NÃO é sentinela — só é tocado uma vez, na primeira passada,
- * se ele já era vazio (aí não há nada a redigir e a guarda não dispara).
+ * Idempotência: o marcador de "já redigida" é `redacted: true` em TODO passo.
+ * Não dá para usar o vácuo: o `tool_calls` de uma run que nunca chamou
+ * ferramenta é `[]` de nascença (`not null default '[]'`), e reescrevê-lo seria
+ * perpétuo e vazio — `[]` não tem passo pendente e nunca é tocado.
  */
-export const TOOL_CALLS_REDIGIDOS: unknown[] = [{ redacted: true }];
+export function redigirToolCalls(toolCalls: unknown): unknown[] {
+  const passos = Array.isArray(toolCalls) ? (toolCalls as unknown[]) : [];
+  return passos.map((p) => {
+    const passo = (p ?? {}) as { step?: unknown; tool_name?: unknown; tool_calls?: unknown };
+    const chamadas = Array.isArray(passo.tool_calls) ? (passo.tool_calls as unknown[]) : [];
+    return {
+      ...(typeof passo.step === "number" ? { step: passo.step } : {}),
+      ...(typeof passo.tool_name === "string" ? { tool_name: passo.tool_name } : {}),
+      redacted: true,
+      tool_calls: chamadas.map((c) => {
+        const nome = (c as { tool_name?: unknown } | null)?.tool_name;
+        return { tool_name: typeof nome === "string" ? nome : "unknown" };
+      }),
+    };
+  });
+}
+
+/** A run ainda tem passo não redigido? `[]` de nascença não tem. */
+export function toolCallsPendentes(toolCalls: unknown): boolean {
+  return (
+    Array.isArray(toolCalls) &&
+    toolCalls.some((p) => (p as { redacted?: unknown } | null)?.redacted !== true)
+  );
+}
 
 export interface ResultadoDaRedacao {
   /** As leads cujo título foi redigido AGORA (não as que já estavam). */
@@ -323,13 +344,12 @@ export async function completarRedacaoDoContato(
   //
   // Issue #1957. `tool_calls` (jsonb) guarda os argumentos passados às
   // ferramentas — nome do contato e trechos do que a pessoa escreveu — e
-  // nenhuma etapa da cascata passava por ele. As runs do contato entram no
-  // expurgo trocando o conteúdo por `TOOL_CALLS_REDIGIDOS`.
+  // nenhuma etapa da cascata passava por ele. Cada run do contato é redigida
+  // por `redigirToolCalls`, que guarda o nome das ferramentas e apaga o resto.
   //
-  // Idempotência: ver o cabeçalho de `TOOL_CALLS_REDIGIDOS`. O `[]` de nascença
-  // NÃO é tocado (não tem PII a redigir e reescrevê-lo seria perpétuo e vazio),
-  // e o sentinela já-redigido também não. Só entra quem tem conteúdo NÃO
-  // sentinela. A coluna é `not null default '[]'`.
+  // Idempotência: ver o cabeçalho de `redigirToolCalls`. O `[]` de nascença e a
+  // run já redigida não são tocados. Um UPDATE por run, porque o conteúdo
+  // redigido é por run (os nomes das ferramentas diferem).
   let runsRedigidas = 0;
   const { data: runData, error: runSelErr } = await db
     .from("ai_agent_runs")
@@ -338,22 +358,19 @@ export async function completarRedacaoDoContato(
     .eq("contact_id", contato.id);
   if (runSelErr) falhas.push(`ai_agent_runs select: ${runSelErr.message}`);
 
-  const runs = ((runData ?? []) as { id: string; tool_calls: unknown }[]).filter((run) => {
-    const calls = (run.tool_calls ?? []) as unknown[];
-    return calls.length > 0 && JSON.stringify(run.tool_calls) !== JSON.stringify(TOOL_CALLS_REDIGIDOS);
-  });
-  if (runs.length > 0) {
+  const runs = ((runData ?? []) as { id: string; tool_calls: unknown }[]).filter((run) =>
+    toolCallsPendentes(run.tool_calls),
+  );
+  for (const run of runs) {
     const { error } = await db
       .from("ai_agent_runs")
-      .update({ tool_calls: TOOL_CALLS_REDIGIDOS })
+      .update({ tool_calls: redigirToolCalls(run.tool_calls) })
       .eq("organization_id", contato.organizationId)
-      .in("id", runs.map((r) => r.id));
-    if (error) falhas.push(`ai_agent_runs: ${error.message}`);
-    else {
-      runsRedigidas = runs.length;
-      tabelas.push("ai_agent_runs");
-    }
+      .eq("id", run.id);
+    if (error) falhas.push(`ai_agent_runs ${run.id}: ${error.message}`);
+    else runsRedigidas += 1;
   }
+  if (runsRedigidas > 0) tabelas.push("ai_agent_runs");
 
   // ── Passo 7 — ESTADO DA LEAD (`lead_state.next_action` / `qualification`) ──
   //
@@ -503,10 +520,7 @@ function idsComResiduo(argumentos: {
     }
   }
   for (const r of runs) {
-    const calls = (r.tool_calls ?? []) as unknown[];
-    if (r.contact_id && calls.length > 0 && JSON.stringify(r.tool_calls) !== JSON.stringify(TOOL_CALLS_REDIGIDOS)) {
-      comResiduo.add(r.contact_id);
-    }
+    if (r.contact_id && toolCallsPendentes(r.tool_calls)) comResiduo.add(r.contact_id);
   }
   for (const e of estados) {
     if (e.contact_id && (e.next_action !== null || JSON.stringify(e.qualification) !== "{}")) {

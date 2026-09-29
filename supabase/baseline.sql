@@ -42764,7 +42764,9 @@ comment on table public.modulo_secoes_lgpd is
   'Seções de LGPD que um MÓDULO opcional declara (ADR-0002, D8). Escrito só pela migration do módulo; fn_lgpd_redigir_secoes_de_modulo lê com to_regclass e PULA a seção cuja tabela não existe (módulo não instalado).';
 
 alter table public.modulo_secoes_lgpd enable row level security;
-revoke all on public.modulo_secoes_lgpd from anon, authenticated;
+-- Fechada também para `service_role`: o gatilho abaixo é `definer` de dono `postgres` e
+-- executa o `tabela`/`ligacao` gravados aqui, e o default ACL daria GRANT ALL a ele.
+revoke all on public.modulo_secoes_lgpd from public, anon, authenticated, service_role;
 
 create or replace function public.fn_lgpd_redigir_secoes_de_modulo()
 returns trigger

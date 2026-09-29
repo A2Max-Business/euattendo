@@ -56,10 +56,26 @@ if [ -z "$outro_lado" ]; then
   fi
 fi
 
+# ── (d) e (e): o sinal é FORJÁVEL, então o resultado tem de estar preso ────────
+# `GITHEAD_*` é variável de ambiente: quem roda o commit a escreve. E `.git/MERGE_HEAD`
+# também se escreve à mão. Com só (a)-(c), um commit COMUM com
+# `GITHEAD_<um ancestral da main>=x` voltava o plano à versão daquele ancestral e
+# apagava features com exit 0 (medido, nas duas rotas). As duas condições que faltavam
+# são as 6 e 3 do freeze-invariants: (d) o índice é o que a main tem AGORA
+# (`origin/main`), não qualquer ancestral; (e) esta branch nunca tocou o arquivo
+# (`HEAD` == merge-base). Com as duas, o único conteúdo que o sinal libera é o da
+# ponta da main sobre uma branch que não mexeu no plano — que é o merge legítimo.
+# A sentinela de (e) é a MESMA dos dois lados: "ausente nos dois" (a main criou o
+# arquivo depois do ponto da branch) é o caso legítimo, não um descasamento.
 if [ -n "$outro_lado" ] \
   && git merge-base --is-ancestor "$outro_lado" origin/main 2>/dev/null \
   && [ "$(git rev-parse -q --verify ':plan/features.json' 2>/dev/null || echo ausente-no-indice)" \
-     = "$(git rev-parse -q --verify "${outro_lado}:plan/features.json" 2>/dev/null || echo ausente-no-outro-lado)" ]; then
+     = "$(git rev-parse -q --verify "${outro_lado}:plan/features.json" 2>/dev/null || echo ausente-no-outro-lado)" ] \
+  && [ "$(git rev-parse -q --verify ':plan/features.json' 2>/dev/null || echo ausente-no-indice)" \
+     = "$(git rev-parse -q --verify 'origin/main:plan/features.json' 2>/dev/null || echo ausente-na-ponta)" ] \
+  && base_vf=$(git merge-base HEAD "$outro_lado" 2>/dev/null) \
+  && [ "$(git rev-parse -q --verify 'HEAD:plan/features.json' 2>/dev/null || echo ausente)" \
+     = "$(git rev-parse -q --verify "${base_vf}:plan/features.json" 2>/dev/null || echo ausente)" ]; then
   exit 0
 fi
 

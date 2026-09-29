@@ -258,5 +258,19 @@ assert_exit "$(exit_de "$r")" 0 "M3: com a válvula declarada o MESMO merge segu
 assert_igual "$(pais_de "$m3b")" "2" "M3: e o merge foi mesmo feito"
 assert_contains "$(git -C "$m3b" show "HEAD:$INV")" "MARCADOR-MAIN" "M3: e o invariante da main chegou ao HEAD"
 
+# ── M4 · o sinal é FORJÁVEL: um commit COMUM com `GITHEAD_*` não vira merge ───────────
+# `GITHEAD_<sha>` é variável de ambiente, e quem roda o commit a escreve. Um `git commit`
+# COMUM (sem merge) que edita o invariante à mão, com o sinal apontando para a ponta da main,
+# tem de ser recusado como qualquer edição: as condições 3 a 6 do guard prendem o resultado ao
+# conteúdo da main, e o sinal sozinho não inocenta nada.
+m4="$TMP/m4"; armar "$m4" "$principal" "$BASE"
+inv "$SLOT_BRANCH" "$SLOT_MAIN" 'it("MARCADOR-FORJADO", () => {});' > "$m4/$INV"
+git -C "$m4" add -A >/dev/null
+SHA_M4=$(git -C "$m4" rev-parse HEAD)
+r=$( cd "$m4" && env "GITHEAD_$PONTA_MAIN=origin/main" git commit -q -m "edição disfarçada" 2>&1 ); rc=$?
+assert_recusa "$rc" "M4: commit comum com GITHEAD_<ponta> forjado que edita o invariante é RECUSADO"
+assert_contains "$r" "$INV" "M4: e a mensagem nomeia o invariante"
+assert_igual "$(git -C "$m4" rev-parse HEAD)" "$SHA_M4" "M4: e o HEAD ficou PARADO (nada foi commitado)"
+
 printf '\nmerge-auto-commit-passa-pelos-guards: %s casos, %s falha(s)\n' "$casos" "$falhas"
 [ "$falhas" -eq 0 ] || exit 1

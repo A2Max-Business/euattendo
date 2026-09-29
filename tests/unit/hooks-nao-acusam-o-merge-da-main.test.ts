@@ -246,6 +246,33 @@ describe("hooks não acusam o MERGE da main (#374)", () => {
     },
   );
 
+  /**
+   * O sinal do outro lado é FORJÁVEL: `GITHEAD_*` é variável de ambiente e
+   * `.git/MERGE_HEAD` se escreve à mão. Um commit COMUM, numa branch em dia com a
+   * main, volta o plano à versão de um ANCESTRAL da main (apaga a feature "b") e
+   * aponta o sinal para esse ancestral. Sem as condições (d) índice == ponta da
+   * main e (e) HEAD == merge-base, as duas rotas saíam 0 (medido; a do
+   * MERGE_HEAD já saía 0 na main antes do #374).
+   */
+  for (const rota of ["GITHEAD_<ancestral> forjado", "MERGE_HEAD escrito à mão"]) {
+    it.skipIf(!temJq)(`(d) plano voltado a um ancestral da main com ${rota} continua BARRADO`, () => {
+      const { dir, ponta, base } = fixture();
+      git(dir, "checkout", "-q", "-b", "em-dia", ponta);
+      git(dir, "checkout", base, "--", PLANO);
+      git(dir, "add", "--", PLANO);
+      // premissa: o índice é exatamente o blob do outro lado forjado — a condição
+      // antiga (índice == outro lado) vale, e é isso que o ataque explora.
+      expect(git(dir, "rev-parse", `:${PLANO}`)).toBe(git(dir, "rev-parse", `${base}:${PLANO}`));
+
+      let env: Record<string, string> = {};
+      if (rota.startsWith("GITHEAD")) env = { [`GITHEAD_${base}`]: "origin/main" };
+      else writeFileSync(join(dir, git(dir, "rev-parse", "--git-path", "MERGE_HEAD")), `${base}\n`);
+
+      const r = rodar(dir, PLANO_GUARD, env);
+      expect(r.rc, r.saida.slice(0, 400)).toBe(1);
+    });
+  }
+
   it("(a) SABOTAGEM: guard de volta ao comportamento antigo deixa o MESMO estado VERMELHO", () => {
     const { dir, ponta } = fixture();
     trazERescreve(dir, INV);

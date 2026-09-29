@@ -105,7 +105,7 @@ describe("termo que não sobra nada depois de normalizado não vale consulta", (
 /**
  * O parêntese (#1895): a lista inteira de volta pela porta do `termoSeguroParaOr`.
  *
- * Medido na instalação real (ira a `%` no PostgREST): `buscaValeConsulta("()")`
+ * Medido na instalação real (vira `%` no PostgREST): `buscaValeConsulta("()")`
  * passava no piso — `normalizarTermoDeBusca` não colapsa `()`, então o termo vira
  * 2 caracteres; `termoSeguroParaOr` troca `()` por `**`; e o `or=` vira `%%%%`,
  * que casa TUDO. `"(a"` vira `%a%`, igualmente amplíssimo.

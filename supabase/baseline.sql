@@ -44220,7 +44220,7 @@ comment on column public.knowledge_searches.author_user_id is
 do $pub$
 declare
   -- md5 do corpo abaixo. Conferido logo após o insert — ver item 2 do cabeçalho.
-  v_md5 constant text := '2acecdf0f8e7eb0f426d37d3cede5b97';
+  v_md5 constant text := '73c66800b7d64797252795b708b26cb3';
   v_id  uuid;
 begin
   select id into v_id
@@ -44271,8 +44271,9 @@ forçado. Inventar é pior do que demorar um instante a mais para responder.
 - SE o lead só disse "quero agendar" sem contexto → pergunte o motivo/serviço
   primeiro. Agendar sem saber o quê gera erro de encaixe (ex.: consulta de 20min
   marcada num slot de 1h de procedimento).
-- SE você ainda não tem o `slug` desse serviço → chame `crm_list_event_types` e escolha
-  o tipo pelo que o lead descreveu; é dela que sai o `event_type_slug` do passo seguinte.
+- SE você ainda não tem o `slug` desse serviço e `crm_list_event_types` está na sua mão →
+  chame-a e escolha o tipo pelo que o lead descreveu; é dela que sai o `event_type_slug` do
+  passo seguinte.
 
 **2. Ofereça opções fechadas, não uma pergunta aberta**
 - SE o tipo já está na lista mas horário nenhum foi consultado ainda → chame
@@ -44292,10 +44293,10 @@ forçado. Inventar é pior do que demorar um instante a mais para responder.
 - Se for reagendamento, o horário anterior a ser substituído.
 
 **4. Confirme por escrito antes de encerrar**
-- SE o lead escolheu um horário → grave de verdade com `crm_book_appointment`, usando o
-  `starts_at` que `crm_find_free_slots` devolveu, sem reescrever, e SÓ ENTÃO repita por
-  escrito. Horário oferecido e não marcado não é reserva — é ele que gera reagendamento
-  forçado.
+- SE o lead escolheu um horário e `crm_book_appointment` está na sua mão → grave de verdade
+  com ela, usando o `starts_at` que `crm_find_free_slots` devolveu, sem reescrever, e SÓ ENTÃO
+  repita por escrito. Horário oferecido e não marcado não é reserva — é ele que gera
+  reagendamento forçado.
 - SE o lead aceitar um horário → repita de volta por escrito: "Confirmado:
   [serviço] dia [data] às [hora], em [local]. Confirma pra mim?"
 - Só considere o agendamento fechado depois do "sim"/confirmação explícita do lead —

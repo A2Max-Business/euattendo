@@ -225,6 +225,8 @@ describe("o playbook da agenda ensina os DOIS passos da cadeia (#1019)", () => {
     expect(corpo).toContain("no MESMO TURNO");
     // o primeiro passo entra CONDICIONADO — ver a régua no docblock acima
     expect(corpo).toContain("Se `crm_list_event_types` também estiver na sua mão");
+    // o passo 1 também: a condição é TER a ferramenta, não só faltar o `slug`
+    expect(corpo).toContain("e `crm_list_event_types` está na sua mão");
   });
 
   it("manda chamar a consulta de horários ANTES de responder, não depois da lista", () => {
@@ -234,6 +236,8 @@ describe("o playbook da agenda ensina os DOIS passos da cadeia (#1019)", () => {
   it("a cadeia continua até a marcação, com o `starts_at` que a consulta devolveu", () => {
     expect(corpo).toContain("crm_book_appointment");
     expect(corpo).toContain("`starts_at` que `crm_find_free_slots` devolveu");
+    // agente só de consulta não tem a marcação: a ordem de gravar vem condicionada
+    expect(corpo).toContain("e `crm_book_appointment` está na sua mão");
   });
 
   it("o desfecho do handoff continua CONDICIONADO a não ter a ferramenta", () => {

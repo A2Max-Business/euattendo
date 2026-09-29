@@ -15,7 +15,8 @@
 import { readFileSync } from "node:fs";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render as renderRTL, screen } from "@testing-library/react";
+import { cleanup, render as renderRTL, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { PERFIS_DO_PAIS, type PerfilDoPais } from "@/lib/legal/perfil-do-pais";
@@ -23,7 +24,8 @@ import { PERFIS_DO_PAIS, type PerfilDoPais } from "@/lib/legal/perfil-do-pais";
 const orgAtiva = vi.hoisted(() => ({ atual: null as { currency?: string | null; country?: string | null } | null }));
 vi.mock("@/hooks/auth/AuthProvider", () => ({ useActiveOrg: () => orgAtiva.atual }));
 vi.mock("@/hooks/i18n/useT", () => ({ useT: () => (s: string) => s }));
-vi.mock("@/lib/api/client", () => ({ apiClient: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
+const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), patch: vi.fn() }));
+vi.mock("@/lib/api/client", () => ({ apiClient: api }));
 
 import { NewContactDialog } from "@/components/contacts/NewContactDialog";
 import { LeadFieldsForm } from "@/components/kanban/LeadFieldsForm";
@@ -73,6 +75,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   orgAtiva.atual = null;
+  vi.clearAllMocks();
 });
 
 const FUNIL = "33333333-3333-4333-8333-333333333333";
@@ -122,6 +125,21 @@ describe("o documento e o exemplo de telefone seguem o país da organização", 
     expect(screen.getByText(/Bilhete \(opcional\)/)).toBeTruthy();
     expect(screen.getByPlaceholderText("+999123456789")).toBeTruthy();
     expect(screen.getByPlaceholderText("003862011LA042")).toBeTruthy();
+  });
+
+  it("e a tela valida pela MESMA régua do servidor", async () => {
+    // Mostrar "Bilhete" e recusá-lo como CPF antes de chamar a API seria
+    // contrato quebrado: o formulário barraria o que o servidor aceitaria.
+    orgAtiva.atual = { currency: "EUR", country: "XI" };
+    api.post.mockResolvedValue({ data: { contact: { id: "c1" }, action: "created" } });
+    const usuario = userEvent.setup();
+    render(<NewContactDialog open onOpenChange={() => {}} />);
+
+    await usuario.type(screen.getByLabelText(/Telefone/i), "+351912345678");
+    await usuario.type(screen.getByLabelText(/Bilhete/i), "003862011LA042");
+    await usuario.click(screen.getByRole("button", { name: /Criar contato/i }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalled());
   });
 
   it("sem país declarado, vale o Brasil — nada muda para quem já usa", () => {

@@ -60,7 +60,7 @@ const preview = (): TurnPreview =>
 
 const definition = (execute: (args: Record<string, unknown>) => unknown) =>
   tool({
-    inputSchema: z.record(z.unknown()),
+    inputSchema: z.record(z.string(), z.unknown()),
     execute: async (args) => execute(args as Record<string, unknown>),
   });
 

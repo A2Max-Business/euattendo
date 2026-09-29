@@ -854,7 +854,7 @@ export async function deleteContactHandler(
     throw new ApiError(
       409,
       "state_conflict",
-      undefined,
+      { vinculos },
       ctx.requestId,
       traduzir("Não foi possível excluir: o contato ainda tem registros vinculados.", ctx.idioma ?? "pt-BR"),
     );

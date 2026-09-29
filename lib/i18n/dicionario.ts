@@ -1061,6 +1061,7 @@ export const DICIONARIO: Traducoes = {
   "Revisar provedores de IA": { es: "Revisar proveedores de IA" },
   "Revisar modelos do canal": { es: "Revisar plantillas del canal" },
   "Abrir uma conversa afetada": { es: "Abrir una conversación afectada" },
+  "Abrir Agenda": { es: "Abrir Agenda" },
   "Abrir uso de IA": { es: "Abrir uso de IA" },
   "Abrir Radar": { es: "Abrir Radar" },
   "Peça a quem administra para revisar a conexão do WhatsApp.": { es: "Pide a quien administra que revise la conexión de WhatsApp." },

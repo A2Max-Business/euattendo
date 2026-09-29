@@ -1,9 +1,9 @@
 ---
 impacto: nada_mudou
 secao: corrigido
-titulo: Custo das chamadas do agente deixa de ficar nulo com OpenRouter (modelo com prefixo provider/)
+titulo: Com OpenRouter, o custo das respostas da IA volta a ser contado — e o limite de gasto passa a valer
 ---
 
-Com provedor OpenRouter, o id do modelo chegava com o prefixo `anthropic/…` e a tabela de preços do agente — indexada sem o prefixo — não achava a linha de custo. Resultado: `llm_calls.cost_cents` nulo em toda chamada de atendimento, guarda e classificação de etapa, a tela de Uso mostrando gasto zero e o teto de gasto de IA da organização nunca disparando.
+Com o provedor OpenRouter (ou qualquer gateway que nomeie o modelo como `anthropic/claude-…` ou `openai/gpt-…`), o custo das respostas do agente, das guardas e da classificação de etapa ficava em branco: a tela Uso de IA mostrava gasto zero e o limite de gasto da organização nunca era alcançado. A busca de preço agora entende esse formato. Modelo que não está na tabela de preços continua sem custo — nunca com o preço de outro. Crédito: @webtecnica (#1929), a partir do diagnóstico de @eduardosuruagy (#1880).
 
-A busca de preço agora tolera o prefixo `provider/` (recorta até a primeira barra, na mesma ordem da tolerância do sufixo de data), e o custo volta a ser computado. Crédito: @webtecnica (#1929)
+O que muda depois de atualizar: a tela Uso de IA passa a mostrar o gasto das chamadas feitas a partir da atualização (as anteriores seguem sem custo, então o total deste mês começa a contar do dia em que você atualizou). Se alguma organização tem limite de gasto configurado para interromper o atendimento, esse limite passa a valer de verdade: ao chegar nele vem primeiro o aviso na Central e, depois, a IA para de responder e as conversas vão para a fila humana. Aumentar o limite evita paradas novas, mas não devolve a IA às conversas que já pararam — cada uma é retomada na própria conversa. Para conferir antes, abra Uso de IA › Orçamento; como parada de emergência da instalação inteira existe `AI_BUDGET_ENFORCEMENT=off` no `.env`.

@@ -144,8 +144,8 @@ export PATH="$WORK/bin:$PATH"
 # que JÁ EXISTE (o caso da issue); `com_env` = 0 é a instalação NOVA, em que o
 # clone ainda não tem `.env` nenhum — que é como o install.sh chega ao
 # `source _common.sh` na prática.
-montar_instalacao() {  # montar_instalacao <raiz> <0|1 sem .env>
-  local raiz="$1" sem_env="${2:-0}" proj="$1/deskcommcrm"
+montar_instalacao() {  # montar_instalacao <raiz> <0|1 sem .env> [WAHA_IMAGE]
+  local raiz="$1" sem_env="${2:-0}" waha="${3:-devlikeapro/waha:latest-2026.7.2}" proj="$1/deskcommcrm"
   mkdir -p "$proj"
   cp -RL "$REPO_ROOT/hostgator-setup-kit" "$proj/"
   mkdir -p "$proj/supabase"
@@ -155,6 +155,7 @@ montar_instalacao() {  # montar_instalacao <raiz> <0|1 sem .env>
     cat > "$proj/.env" <<ENV
 APP_IMAGE=${NS}/deskcommcrm:0.9.0
 APP_PULL_POLICY=missing
+WAHA_IMAGE=${waha}
 SUPABASE_DB_URL=postgresql://x/y
 NEXT_PUBLIC_APP_URL=https://crm.exemplo.com.br
 INTERNAL_SECRET=segredo
@@ -276,6 +277,33 @@ check "em x86_64 a atualização pullou a imagem do app" \
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo
+echo '── 3b. ARM64 acompanha as próximas versões pelas imagens multiarch publicadas'
+# Simula uma instalação ARM já existente: update.sh atualiza as imagens
+# próprias do CRM pela mesma tag, preserva a imagem ARM do WAHA gravada no
+# .env, e usa pull do registry sem tentar compilar na VPS.
+R3B="$WORK/caso3b"; mkdir -p "$R3B"
+montar_instalacao "$R3B" 0 devlikeapro/waha:noweb-arm-2026.7.2
+OUT3B="$WORK/saida3b.txt"
+rodar_update "$R3B" aarch64 0 "$OUT3B"; RC3B="$RC"
+ENV3B="$R3B/deskcommcrm/.env"
+check "em ARM64 o update.sh sai com 0 (rc=$RC3B)" test "$RC3B" -eq 0
+check "em ARM64 o update usa as imagens publicadas por pull" \
+  grep -q 'compose .*pull' "$DOCKER_LOG"
+check "em ARM64 não tenta compilar as imagens localmente" \
+  nao_contem '-f docker-compose.build.yml build' "$DOCKER_LOG"
+check "o app recebe a versão da atualização" \
+  grep -q "^APP_IMAGE=${NS}/deskcommcrm:0.9.0$" "$ENV3B"
+check "o worker recebe a mesma versão do app" \
+  grep -q "^WORKER_IMAGE=${NS}/deskcomm-worker:0.9.0$" "$ENV3B"
+check "o scheduler recebe a mesma versão do app" \
+  grep -q "^SCHEDULER_IMAGE=${NS}/deskcomm-scheduler:0.9.0$" "$ENV3B"
+check "a voz recebe a mesma versão do app" \
+  grep -q "^VOICE_AGENT_IMAGE=${NS}/deskcomm-voice-agent:0.9.0$" "$ENV3B"
+check "a atualização preserva o WAHA ARM64 escolhido na instalação" \
+  grep -q '^WAHA_IMAGE=devlikeapro/waha:noweb-arm-2026.7.2$' "$ENV3B"
+
+# ─────────────────────────────────────────────────────────────────────────────
+echo
 echo '── 4. A DECISÃO, isolada: a função pura que decide'
 # As respostas, sem `uname` e sem disco — é o que permite ao gate ler a decisão
 # sem montar instalação nenhuma. amd64 e arm64 são nativas; só uma arquitetura
@@ -307,19 +335,14 @@ check "arquitetura sem imagem em instalação existente → recuperar" \
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo
-echo '── 5. QUEM JÁ ESTÁ PRESO: o kit do disco é o da guarda velha, e o passo'
-echo '      único que o fragmento de release ensina tem de funcionar'
+echo '── 5. RECUPERAÇÃO: um kit antigo ainda protege arquiteturas sem imagem'
 # O update.sh dá `source` no _common.sh que está NO DISCO antes do checkout da
-# versão nova. Num kit antigo, uma VPS ARM ainda era bloqueada pela guarda
-# (#1042, v1.35.0 em diante),
-# esse kit velho morre no topo e nunca baixa este conserto — nem pelo terminal
-# nem pelo botão "Atualizar", que roda o mesmo update.sh. A saída é trocar o
-# código à mão uma vez e rodar o update.sh da versão nova. Este caso prova as
-# duas metades: que a pessoa está presa (a premissa do texto), e que o comando
-# publicado no fragmento `.changes/guarda-arm-nao-mata-a-recuperacao.md` a solta.
+# versão nova. Para arquitetura sem imagem publicada, a guarda antiga protege
+# instalações novas. Uma instalação existente pode trocar o código à mão uma
+# vez e então usar a recuperação por build local.
 #
 # O kit "velho" é o do próprio PR com a detecção de instalação desligada, que
-# é exatamente o comportamento da guarda antiga do #1042: recusa ARM sem olhar nada.
+# é exatamente o comportamento da guarda antiga do #1042: recusa RISC-V sem olhar nada.
 R5="$WORK/caso5"; mkdir -p "$R5"; montar_instalacao "$R5" 0
 (
   cd "$R5/deskcommcrm" || exit 1
@@ -331,18 +354,17 @@ R5="$WORK/caso5"; mkdir -p "$R5"; montar_instalacao "$R5" 0
 ) >/dev/null 2>&1
 OUT5A="$WORK/saida5a.txt"; OUT5B="$WORK/saida5b.txt"
 : > "$DOCKER_LOG"; RC5A=0
-( cd "$R5" && env FAKE_ARCH=aarch64 ARM_SEM_IMAGEM=1 \
+( cd "$R5" && env FAKE_ARCH=riscv64 ARM_SEM_IMAGEM=1 \
     bash deskcommcrm/hostgator-setup-kit/update.sh --to v0.9.0 --force \
 ) > "$OUT5A" 2>&1 < /dev/null || RC5A=$?
 check "com o kit velho no disco, nem --to/--force passam da guarda (rc=$RC5A, e != 0)" \
   test "$RC5A" -ne 0
 check "e o que ele lê é a recusa do #1042" \
   grep -q 'Use uma VPS x86_64/amd64' "$OUT5A"
-# O passo único, como o fragmento o escreve (sem o `git fetch`, que aqui não
-# tem remoto: a tag já está no repositório descartável).
+# Depois de trocar manualmente o código para a versão que contém a recuperação.
 : > "$DOCKER_LOG"; RC5B=0
 ( cd "$R5/deskcommcrm" && git checkout --quiet v0.9.0 && \
-  env FAKE_ARCH=aarch64 ARM_SEM_IMAGEM=1 \
+  env FAKE_ARCH=riscv64 ARM_SEM_IMAGEM=1 \
     bash hostgator-setup-kit/update.sh --to v0.9.0 --force \
 ) > "$OUT5B" 2>&1 < /dev/null || RC5B=$?
 check "depois do checkout à mão, o update.sh da versão nova sai com 0 (rc=$RC5B)" \
@@ -350,8 +372,8 @@ check "depois do checkout à mão, o update.sh da versão nova sai com 0 (rc=$RC
 check "e ele chega à recuperação por build local" \
   grep -q -- '-f docker-compose.build.yml build' "$DOCKER_LOG"
 
-printf '\nstatus: caso1(arquitetura sem imagem+recuperação)=%s caso2(nova arquitetura sem imagem)=%s caso3(amd64)=%s\n' \
-  "$RC1" "$RC2" "$RC3"
+printf '\nstatus: caso1(arquitetura sem imagem+recuperação)=%s caso2(nova arquitetura sem imagem)=%s caso3(amd64)=%s caso3b(arm64 updates)=%s\n' \
+  "$RC1" "$RC2" "$RC3" "$RC3B"
 if [ "$FAILS" -eq 0 ]; then
   echo "OK — a guarda preserva a recuperação de arquiteturas sem imagem e aceita as arquiteturas publicadas."
 else

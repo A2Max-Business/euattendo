@@ -7,19 +7,33 @@ import { toast } from "sonner";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { idiomaAtual } from "@/lib/i18n/IdiomaProvider";
 
+/**
+ * A pré-checagem do handler põe `{ vinculos, por_tabela }` em `error.details`
+ * (issue #1925). Com um compromisso na Agenda barrando, a frase diz O QUE barrou
+ * e O QUE fazer; qualquer outro caso devolve null e cai no texto genérico.
+ * A frase sai de chave fixa do dicionário (a de `vinculos` vem do servidor em
+ * pt-BR e não se traduz).
+ */
+export function mensagemDeBloqueioPorVinculo(
+  details: Record<string, unknown> | undefined,
+  t: (texto: string) => string,
+): string | null {
+  const porTabela = details?.por_tabela as Record<string, unknown> | undefined;
+  const n = porTabela?.calendar_appointments;
+  if (typeof n !== "number" || n < 1) return null;
+  return n === 1
+    ? t("Este contato tem 1 compromisso na Agenda. Cancele ou apague o compromisso antes de excluir.")
+    : t("Este contato tem {n} compromissos na Agenda. Cancele ou apague os compromissos antes de excluir.").replace(
+        "{n}",
+        String(n),
+      );
+}
+
 function toastDeBloqueioPorVinculo(err: ApiError): boolean {
-  // A pré-checagem do handler põe `{ vinculos }` em `error.details` (issue
-  // #1925). Se vier, a mensagem genérica cede lugar a uma que diz O QUE barrou
-  // e O QUE fazer — com link para a Agenda, que é onde se desfaz o vínculo.
-  const vinculos = err.details?.vinculos;
-  if (!Array.isArray(vinculos) || vinculos.length === 0) return false;
-  const unicos = [...new Set(vinculos as string[])];
-  const descricao =
-    unicos.length === 1
-      ? `Este contato tem ${unicos[0]}. Cancele ou apague o compromisso na Agenda antes de excluir.`
-      : `Este contato ainda tem: ${unicos.join(", ")}. Resolva os vínculos na Agenda antes de excluir.`;
   const t = (s: string) => traduzir(s, idiomaAtual());
-  toast.error(t(descricao), {
+  const mensagem = mensagemDeBloqueioPorVinculo(err.details, t);
+  if (!mensagem) return false;
+  toast.error(mensagem, {
     action: {
       label: t("Abrir Agenda"),
       onClick: () => {

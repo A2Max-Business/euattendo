@@ -154,7 +154,10 @@ describe("deleteContactHandler", () => {
       code: "state_conflict",
       // #1925: o 409 entrega o QUE barrou em `details.vinculos`, para a tela
       // montar a frase e o link para a Agenda em vez do texto genérico fixo.
-      details: { vinculos: ["1 compromisso(s) na agenda"] },
+      details: {
+        vinculos: ["1 compromisso(s) na agenda"],
+        por_tabela: { calendar_appointments: 1 },
+      },
     });
     // O ponto da issue: nada foi apagado antes de saber que a ficha não sai.
     expect(chamadas).toEqual([]);

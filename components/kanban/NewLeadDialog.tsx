@@ -244,7 +244,8 @@ export function NewLeadDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              {/* O rótulo segue a moeda da organização: `R$` em duro mentia para quem opera em euro. */}
+              {/* Negócio novo: o rótulo segue a moeda da organização, que é onde ele
+                  vai nascer. `R$` em duro mentia para quem opera em euro. */}
               <Label htmlFor="valueReais">{t("Valor")} ({simboloDaMoeda(moedaDoValor)})</Label>
               <Input
                 id="valueReais"

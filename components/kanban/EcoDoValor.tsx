@@ -2,7 +2,7 @@
 
 import { useWatch, type Control, type FieldValues, type Path } from "react-hook-form";
 
-import { formatCents, parseReaisToCents } from "@/lib/money";
+import { formatValorDoNegocio, parseReaisToCents } from "@/lib/money";
 
 /**
  * Mostra, embaixo do campo, como o valor digitado foi entendido.
@@ -20,7 +20,7 @@ export function EcoDoValor<T extends FieldValues>({
   moeda,
 }: {
   control: Control<T>;
-  /** A moeda do negócio; o eco em real embaixo de um campo em euro era o defeito. */
+  /** A moeda do NEGÓCIO; o eco em real embaixo de um campo em euro era o defeito. */
   moeda: string;
 }) {
   const digitado = useWatch({ control, name: "valueReais" as Path<T> }) as unknown as
@@ -28,5 +28,10 @@ export function EcoDoValor<T extends FieldValues>({
     | undefined;
   const centavos = parseReaisToCents(digitado ?? "");
   if (centavos === null) return null;
-  return <p className="text-xs text-muted-foreground">= {formatCents(centavos, moeda)}</p>;
+  // `formatValorDoNegocio`, e NÃO `formatCents`: o negócio guarda o valor ×100
+  // em qualquer moeda (é o que `parseReaisToCents` acabou de fazer logo acima),
+  // enquanto `formatCents` lê unidades menores. Em moeda sem centavos as duas
+  // réguas divergem por cem — o eco mostraria `Gs. 12.500.000` onde o card
+  // mostra `Gs. 125.000`.
+  return <p className="text-xs text-muted-foreground">= {formatValorDoNegocio(centavos, moeda)}</p>;
 }

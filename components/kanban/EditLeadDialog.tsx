@@ -141,7 +141,8 @@ export function EditLeadDialog({ open, onOpenChange, lead, pipelineId }: Props) 
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              {/* O rótulo segue a moeda da organização: `R$` em duro mentia para quem opera em euro. */}
+              {/* O rótulo segue a moeda do NEGÓCIO (a organização é a reserva):
+                  `R$` em duro mentia para quem opera em euro. */}
               <Label htmlFor="valueReais">{t("Valor")} ({simboloDaMoeda(moedaDoValor)})</Label>
               <Input
                 id="valueReais"

@@ -91,6 +91,20 @@ describe("o valor do negócio usa a moeda certa — e o eco embaixo do campo tam
     expect(screen.queryByText(/R\$/)).toBeNull();
   });
 
+  it("moeda SEM centavos: o eco usa a régua do negócio, não a das unidades menores", () => {
+    // `value_cents` guarda ×100 em qualquer moeda; `formatCents` lê unidades
+    // menores. Em guarani as duas divergem por cem, e o eco mostraria
+    // `Gs. 12.500.000` embaixo de um card que diz `Gs. 125.000`.
+    orgAtiva.atual = { currency: "PYG", country: null };
+    render(
+      <LeadFieldsForm
+        lead={{ ...(NEGOCIO as object), currency: "PYG", value_cents: 12_500_000 } as never}
+        pipelineId={FUNIL}
+      />,
+    );
+    expect(screen.getByText(/= Gs\.\s?125\.000$/)).toBeTruthy();
+  });
+
   it("negócio sem moeda gravada cai na da organização", () => {
     orgAtiva.atual = { currency: "EUR", country: null };
     render(<LeadFieldsForm lead={{ ...(NEGOCIO as object), currency: null } as never} pipelineId={FUNIL} />);

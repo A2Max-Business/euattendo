@@ -87,65 +87,65 @@ function semear(): void {
     -- DOIS alvos dos gatilhos recusadores da issue.
     insert into public.followup_flow_versions (id, organization_id, graph)
       values ('${VERSAO}', '${GOV_ORG}', '{"nodes":[],"edges":[]}')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.followup_flow_pointers (id, organization_id, name, status, active_version_id)
       values ('${PONTEIRO}', '${GOV_ORG}', 'retorno-1862', 'active', '${VERSAO}')
-      on conflict do nothing;
+      on conflict (id) do nothing;
 
     -- (b) ficha com turno, para medir a recusa do DELETE direto.
     insert into public.contacts (id, organization_id, display_name)
       values ('${CONTATO_A}', '${GOV_ORG}', 'Contato 1862 A — recusa direta')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.followup_enrollments
       (id, organization_id, pointer_id, version_id, contact_id, current_node_id, status, next_eval_at)
       values ('${ENROLL_A}', '${GOV_ORG}', '${PONTEIRO}', '${VERSAO}', '${CONTATO_A}', 'inicio', 'active', now())
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.followup_enrollment_events
       (id, organization_id, enrollment_id, node_id, event_type, payload, idempotency_key)
       values ('${EVENTO_A}', '${GOV_ORG}', '${ENROLL_A}', 'inicio', 'turn_enqueued', '{}', 'inicio:1')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.job_queue (id, organization_id, contact_id, kind, payload, status)
       values ('${TURNO_A}', '${GOV_ORG}', '${CONTATO_A}', 'followup_turn',
               '{"followup_enrollment_id": "${ENROLL_A}", "node_id": "inicio"}', 'pending')
-      on conflict do nothing;
+      on conflict (id) do nothing;
 
     -- (a) a ficha COMPLETA: mensagem, conversa, inscrição, turno e evento.
     insert into public.contacts (id, organization_id, display_name)
       values ('${CONTATO_B}', '${GOV_ORG}', 'Contato 1862 B — sai inteiro')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.conversations (id, organization_id, contact_id, channel_session_id, status)
       values ('${CONV_B}', '${GOV_ORG}', '${CONTATO_B}', '${GOV_SESSION}', 'open')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body)
       values ('${MSG_B}', '${GOV_ORG}', '${CONV_B}', '${GOV_SESSION}', '${CONTATO_B}', 'text', 'inbound', 'historico 1862')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.followup_enrollments
       (id, organization_id, pointer_id, version_id, contact_id, conversation_id, current_node_id, status, next_eval_at)
       values ('${ENROLL_B}', '${GOV_ORG}', '${PONTEIRO}', '${VERSAO}', '${CONTATO_B}', '${CONV_B}', 'inicio', 'active', now())
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.followup_enrollment_events
       (id, organization_id, enrollment_id, node_id, event_type, payload, idempotency_key)
       values ('${EVENTO_B}', '${GOV_ORG}', '${ENROLL_B}', 'inicio', 'turn_enqueued', '{}', 'inicio:1')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.job_queue (id, organization_id, contact_id, kind, payload, status)
       values ('${TURNO_B}', '${GOV_ORG}', '${CONTATO_B}', 'followup_turn',
               '{"followup_enrollment_id": "${ENROLL_B}", "node_id": "inicio"}', 'pending')
-      on conflict do nothing;
+      on conflict (id) do nothing;
 
     -- (c) ficha com compromisso de agenda (RESTRICT da 0177) — recusa de OUTRO motivo.
     insert into public.contacts (id, organization_id, display_name)
       values ('${CONTATO_C}', '${GOV_ORG}', 'Contato 1862 C — compromisso na agenda')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.conversations (id, organization_id, contact_id, channel_session_id, status)
       values ('${CONV_C}', '${GOV_ORG}', '${CONTATO_C}', '${GOV_SESSION}', 'open')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.messages (id, organization_id, conversation_id, channel_session_id, contact_id, type, direction, body)
       values ('${MSG_C}', '${GOV_ORG}', '${CONV_C}', '${GOV_SESSION}', '${CONTATO_C}', 'text', 'inbound', 'historico da agenda')
-      on conflict do nothing;
+      on conflict (id) do nothing;
     insert into public.calendar_appointments (id, organization_id, contact_id, title, starts_at, ends_at)
       values ('${AGENDA}', '${GOV_ORG}', '${CONTATO_C}', 'Consulta 1862',
               now() + interval '1 day', now() + interval '1 day 1 hour')
-      on conflict do nothing;
+      on conflict (id) do nothing;
   `);
 }
 

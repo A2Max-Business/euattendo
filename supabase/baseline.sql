@@ -20632,11 +20632,16 @@ grant execute on function public.fn_appointment_enrollment_current(uuid,uuid,tex
 create or replace function public.fn_followup_generation_write()
 returns trigger language plpgsql security definer set search_path=public as $$
 begin
- -- #1862 — a cascata da exclusão da ficha não é escrita de follow-up. Este
- -- gatilho é BEFORE ROW: dentro dele, o DELETE que veio de `on delete cascade`
- -- está sob o gatilho da chave estrangeira, com `pg_trigger_depth() > 1`. O
- -- DELETE direto (quem apaga o turno pela API, com `auth.uid()`) está na
- -- profundidade 1 e continua caindo na recusa abaixo — a 42501 não afrouxa.
+ -- #1862 — DELETE que chega em CASCATA não é escrita de follow-up. Este gatilho
+ -- é BEFORE ROW: o DELETE vindo de `on delete cascade` roda sob o gatilho da
+ -- chave estrangeira, com `pg_trigger_depth() > 1`. Passa QUALQUER cascata, não
+ -- só a da ficha: apagar o contato, a inscrição (followup_enrollments), o fluxo
+ -- (followup_flow_pointers) ou a organização leva junto os registros internos.
+ -- O turno que sobra sem inscrição/evento falha fechado em
+ -- fn_followup_job_current. A profundidade não distingue cascata de DELETE
+ -- feito por outro gatilho: hoje nenhum gatilho apaga nestas duas tabelas, e
+ -- quem criar um herda esta passagem. O DELETE DIRETO (profundidade 1, com
+ -- `auth.uid()`) continua caindo na recusa abaixo — a 42501 não afrouxa.
  if tg_op='DELETE' and pg_trigger_depth()>1 then return old; end if;
  if tg_table_name='job_queue' then
   if auth.uid() is not null and ((tg_op<>'DELETE' and new.kind='followup_turn') or (tg_op<>'INSERT' and old.kind='followup_turn')) then

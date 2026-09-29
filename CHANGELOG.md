@@ -28,9 +28,13 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
   curinga no `or=`, equivalente a buscar sem critério. Agora o piso da busca o ignora — um termo só
   de asteriscos não vai ao banco.
 
+  Contribuição de @webtecnica (#1948, issue #1935).
+
 - **Excluir contato com compromisso avisa o que barra e como resolver** Ao excluir um contato que tem compromisso na Agenda, a mensagem genérica ("registros
   vinculados") cede lugar a um aviso que diz qual é o vínculo e oferece abrir a Agenda para
   resolver antes de excluir.
+
+  Contribuição de @webtecnica (#1949, issue #1925).
 
 ## [1.63.6] — 2026-09-29
 

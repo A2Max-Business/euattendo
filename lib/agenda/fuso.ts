@@ -195,7 +195,6 @@ export function instanteDe(paredePedida: HoraDeParede, fuso: string): Date {
   return new Date(Math.max(primeiro, segundo));
 }
 
-/** O dia local (`YYYY-MM-DD`) daquele instante — a régua que casa com a exceção por data. */
 /**
  * O instante, redesenhado como se o NAVEGADOR estivesse no fuso pedido.
  *
@@ -213,7 +212,7 @@ export function dataDeParede(instante: Date, fuso: string): Date {
   return new Date(p.ano, p.mes - 1, p.dia, p.hora, p.minuto, p.segundo);
 }
 
-/** A chave de um dia no fuso (ver `dataDeParede`). */
+/** O dia local (`YYYY-MM-DD`) daquele instante — a régua que casa com a exceção por data. */
 export function diaLocalISO(instante: Date, fuso: string): string {
   const p = partesNoFuso(instante, fuso);
   const dois = (n: number) => String(n).padStart(2, "0");

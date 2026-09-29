@@ -2,7 +2,9 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
+import { perfilDoPais } from "@/lib/legal/perfil-do-pais";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +50,7 @@ interface Props {
 
 export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: Props) {
   const t = useT();
+  const perfil = perfilDoPais(useActiveOrg()?.country);
   const create = useCreateContact();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -113,13 +116,17 @@ export function NewContactDialog({ open, onOpenChange, nomeInicial, onCriado }: 
             <Label htmlFor="phone_number">{t("Telefone (E.164)")}</Label>
             <Input
               id="phone_number"
-              placeholder="+5511999998888"
+              placeholder={perfil.telefoneExemplo}
               {...form.register("phone_number")}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="cpf">{t("CPF (opcional)")}</Label>
-            <Input id="cpf" placeholder="00000000000" {...form.register("cpf")} />
+            {/* O documento é o do PAÍS da organização — a API já valida por ele
+                (`contactCreateSchemaDoPais`); só a tela escrevia "CPF" em duro. */}
+            <Label htmlFor="cpf">
+              {perfil.documento.rotulo} ({t("opcional")})
+            </Label>
+            <Input id="cpf" placeholder={perfil.documento.exemplo} {...form.register("cpf")} />
           </div>
           <div className="space-y-2">
             <Label htmlFor="tagsRaw">{t("Tags (separadas por vírgula)")}</Label>

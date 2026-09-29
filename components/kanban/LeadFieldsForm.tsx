@@ -1,5 +1,6 @@
 "use client";
 
+import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -12,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useEditLead } from "@/hooks/kanban/useUpdateLead";
 import type { Lead } from "@/lib/types/leads";
 import { updateLeadSchema, type UpdateLeadInput } from "@/lib/schemas/leads";
-import { parseReaisToCents } from "@/lib/money";
+import { MOEDA_PADRAO, parseReaisToCents, simboloDaMoeda } from "@/lib/money";
 import { CustomFieldsEditor, type CustomFieldDef } from "@/components/contacts/CustomFieldsEditor";
 import { EcoDoValor } from "./EcoDoValor";
 
@@ -50,6 +51,7 @@ function centsToReais(cents: number | null | undefined): string {
  */
 export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCancel }: Props) {
   const t = useT();
+  const org = useActiveOrg();
   const edit = useEditLead(pipelineId);
   const [customFields, setCustomFields] = useState<Record<string, unknown>>(lead.custom_fields ?? {});
 
@@ -137,7 +139,8 @@ export function LeadFieldsForm({ lead, pipelineId, fieldDefs = [], onSaved, onCa
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="valueReais">{t("Valor (R$)")}</Label>
+            {/* O rótulo segue a moeda da organização: `R$` em duro mentia para quem opera em euro. */}
+            <Label htmlFor="valueReais">{t("Valor")} ({simboloDaMoeda(org?.currency ?? MOEDA_PADRAO)})</Label>
             <Input
               id="valueReais"
               inputMode="decimal"

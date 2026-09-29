@@ -1,5 +1,6 @@
 "use client";
 
+import { useActiveOrg } from "@/hooks/auth/AuthProvider";
 import { useT } from "@/hooks/i18n/useT";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -26,7 +27,7 @@ import {
 import { useCreateLead } from "@/hooks/kanban/useCreateLead";
 import type { Stage } from "@/lib/kanban/types";
 import { createLeadSchema, type CreateLeadInput } from "@/lib/schemas/leads";
-import { parseReaisToCents } from "@/lib/money";
+import { MOEDA_PADRAO, parseReaisToCents, simboloDaMoeda } from "@/lib/money";
 import { rotuloDoContato } from "@/lib/contacts/rotulo-do-contato";
 import type { Contact } from "@/lib/types/contacts";
 import { EcoDoValor } from "./EcoDoValor";
@@ -66,6 +67,7 @@ export function NewLeadDialog({
   onCreated,
 }: Props) {
   const t = useT();
+  const org = useActiveOrg();
   const create = useCreateLead(pipelineId);
   const initialStage = useMemo(() => defaultStageId(stages), [stages]);
   // Quem abre o diálogo já sabendo o contato (Inbox) não escolhe de novo.
@@ -240,7 +242,8 @@ export function NewLeadDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="valueReais">{t("Valor (R$)")}</Label>
+              {/* O rótulo segue a moeda da organização: `R$` em duro mentia para quem opera em euro. */}
+              <Label htmlFor="valueReais">{t("Valor")} ({simboloDaMoeda(org?.currency ?? MOEDA_PADRAO)})</Label>
               <Input
                 id="valueReais"
                 inputMode="decimal"

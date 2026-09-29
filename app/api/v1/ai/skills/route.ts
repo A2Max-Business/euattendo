@@ -18,6 +18,7 @@ import { type NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { temPonteiroCanonico } from "@/lib/ai/skills/ponteiro-canonico";
+import { temVersaoNovaNoCatalogo } from "@/lib/ai/skills/versao-nova-catalogo";
 import { requireRole } from "@/lib/auth/require-role";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -108,7 +109,7 @@ export async function GET(_req: NextRequest): Promise<Response> {
       // Só faz sentido pra skill de catálogo: a cópia da org veio de um fork de uma
       // versão de plataforma; se o ponteiro de plataforma hoje aponta outra versão,
       // o catálogo publicou versão nova depois de instalada aqui. Manual nunca → false.
-      versao_nova_catalogo: Boolean(forked && plataforma && forked !== plataforma),
+      versao_nova_catalogo: temVersaoNovaNoCatalogo(forked, plataforma),
       updated_at: p.updated_at,
     };
   });

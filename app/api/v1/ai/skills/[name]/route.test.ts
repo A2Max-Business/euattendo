@@ -227,7 +227,7 @@ describe("PUT /api/v1/ai/skills/[name]", () => {
     expect(body.data).toEqual({ name: "catalogo", version_id: "v2" });
     expect(vi.mocked(insertSkillVersion)).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ tenantId: ORG_ID, name: "catalogo", body: BODY_VALIDO.body }),
+      expect.objectContaining({ tenantId: ORG_ID, name: "catalogo", body: BODY_VALIDO.body, forkedFromVersionId: null }),
     );
     expect(vi.mocked(setSkillPointer)).toHaveBeenCalledWith(
       expect.anything(),

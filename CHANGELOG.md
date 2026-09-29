@@ -8,6 +8,36 @@ Se você roda o DeskcommCRM numa VPS, **leia a seção da versão para a qual es
 
 ## [Não lançado]
 
+## [1.63.4] — 2026-09-29
+
+### Corrigido
+
+- **Com OpenRouter, o custo das respostas da IA volta a ser contado — e o limite de gasto passa a valer** Com o provedor OpenRouter (ou qualquer gateway que nomeie o modelo como `anthropic/claude-…` ou `openai/gpt-…`), o custo das respostas do agente, das guardas e da classificação de etapa ficava em branco: a tela Uso de IA mostrava gasto zero e o limite de gasto da organização nunca era alcançado. A busca de preço agora entende esse formato. Modelo que não está na tabela de preços continua sem custo — nunca com o preço de outro.
+
+  O que muda depois de atualizar: a tela Uso de IA passa a mostrar o gasto das chamadas feitas a partir da atualização (as anteriores seguem sem custo, então o total deste mês começa a contar do dia em que você atualizou). Se alguma organização tem limite de gasto configurado para interromper o atendimento, esse limite passa a valer de verdade: ao chegar nele vem primeiro o aviso na Central e, depois, a IA para de responder e as conversas vão para a fila humana. Aumentar o limite evita paradas novas, mas não devolve a IA às conversas que já pararam — cada uma é retomada na própria conversa. Para conferir antes, abra Uso de IA › Orçamento; a parada de emergência da instalação inteira fica em Administração › Recursos opcionais › Comportamento ("Proteção de gasto de IA"), com `AI_BUDGET_ENFORCEMENT=off` no `.env` como alternativa.
+
+  Contribuição de @webtecnica (#1929). Relatado por @eduardosuruagy (#1880).
+
+- **O aviso de evento morto não abre mais em dobro quando dois drenos rodam juntos** O dreno que vaza eventos para a Central consultava "já existe um aviso aberto?" e só depois inseria — e o cron `event-log-drain` e o drain-loop do worker disparam os dois ao mesmo tempo. Os dois liam "não existe" antes de qualquer escrita, os dois inseriam, e o problema de verdade ficava com dois avisos idênticos na Central. Aviso repetido é aviso que ninguém abre.
+
+  O banco agora é quem segura a fila: um índice único parcial em `agent_inbox_items` (organização, kind e título, só enquanto o aviso está aberto) recusa a segunda linha, e os dois caminhos de escrita passam a tratar essa recusa como o que ela é — "o aviso já estava aberto", e não um erro do dreno. A chave leva o título porque o `event_dead` tem duas famílias que precisam conviver abertas na mesma organização (a da IA que parou de responder e a de mídia), e o predicado é parcial porque uma linha resolvida não pode segurar o slot: reabrir um aviso continua funcionando, e reabrir quando já existe um aberto idêntico volta com resposta clara em vez de erro interno.
+
+  Kinds diferentes, organizações diferentes e as duas famílias do `event_dead` seguem gravando normalmente, em paralelo.
+
+  Contribuição de @webtecnica (#1928).
+
+- **O playbook de agenda ensina os dois passos — listar o que a empresa atende e só depois consultar horários** O playbook `agendamento` é o texto que entra na conversa quando o cliente fala em "agendar", "horário disponível" ou "que horas vocês". Ele começava no meio da cadeia: dizia que a IA só tem acesso à agenda se `crm_find_free_slots` estiver disponível e mandava consultar horários, mas nunca dizia de onde vem o `event_type_slug` que essa ferramenta exige. O primeiro passo, `crm_list_event_types`, não aparecia em nenhuma linha do texto.
+
+  Por isso acontecia a cena da issue #1019: a IA listava os tipos de atendimento, parava ali e respondia "vou verificar", ou passava para a equipe, em vez de oferecer um horário real.
+
+  Agora o texto ensina a cadeia inteira. Primeiro `crm_list_event_types`, de onde sai o `slug` de cada tipo de atendimento. Depois, **no mesmo turno**, `crm_find_free_slots` com esse `event_type_slug`. Quando o cliente escolhe um horário, `crm_book_appointment` com o `starts_at` que a consulta devolveu. Parar depois da lista e responder "vou verificar" passa a ser descrito como o erro que é.
+
+  Cada ferramenta só é mencionada com a condição "se ela estiver na sua mão". O texto vale para a organização inteira e chega por palavra-chave, sem saber quais ferramentas o agente tem ligadas. Para o agente que não tem a ferramenta, nada muda: ele não inventa horário e avisa a equipe.
+
+  A atualização reaplica o `baseline.sql`, e isso já troca o texto padrão. Nenhuma ação é necessária. Uma organização que instalou este playbook pelo catálogo, ou o editou, tem uma cópia própria: essa cópia continua como está e não recebe o texto novo.
+
+  Contribuição de @webtecnica (#1922).
+
 ## [1.63.3] — 2026-09-29
 
 ### Alterado
@@ -9451,7 +9481,8 @@ Primeira versão marcada do DeskcommCRM. O projeto vinha sendo desenvolvido publ
 
 - **Node 22 é obrigatório para desenvolvimento.** A suíte de invariantes instancia o cliente do Supabase, que exige o `WebSocket` global — nativo apenas a partir do Node 22. Isso não afeta quem apenas hospeda: a VPS roda a imagem pronta.
 
-[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v1.63.3...HEAD
+[Não lançado]: https://github.com/melgarafael/DeskcommCRM/compare/v1.63.4...HEAD
+[1.63.4]: https://github.com/melgarafael/DeskcommCRM/compare/v1.63.3...v1.63.4
 [1.63.3]: https://github.com/melgarafael/DeskcommCRM/compare/v1.63.2...v1.63.3
 [1.63.2]: https://github.com/melgarafael/DeskcommCRM/compare/v1.63.1...v1.63.2
 [1.63.1]: https://github.com/melgarafael/DeskcommCRM/compare/v1.63.0...v1.63.1

@@ -106,8 +106,9 @@ Owner/Admin. Não dá para hospedar vários clientes numa conta só.
 
 - **Arquitetura x86_64/amd64 ou ARM64/aarch64.** As imagens DeskcommCRM são publicadas para
   `linux/amd64` e `linux/arm64`; o instalador seleciona a variante oficial ARM64 NOWEB do WAHA.
-  Este caminho usa Supabase externo. O instalador alternativo com Supabase self-hosted na mesma
-  VPS continua limitado a amd64.
+  O modo com Supabase self-hosted na mesma VPS também funciona em ARM64: a versão upstream
+  fixada pelo kit (`self-hosted/v0.8.1`) e as imagens dos seus 11 serviços têm manifestos
+  `linux/arm64`. Ao atualizar `SUPABASE_REF`, confira de novo os manifestos de todas as imagens.
 - **4 GB RAM recomendados.** A imagem é pré-buildada, então o servidor não compila nada e a
   stack SOBE com 2 GB — mas operar é outra coisa: são 7 contêineres, e o WAHA consome
   ~150 MB por sessão de WhatsApp além de ~300 MB de overhead do Node. Com 2 GB você roda

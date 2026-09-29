@@ -274,6 +274,9 @@ pg_container() {
 # A versão do Supabase self-hosted é UMA, e mora aqui: o instalador a instala e
 # o update.sh leva quem já instalou até ela (atualizar_supabase_single_server).
 # Sem `readonly`: o update.sh relê este arquivo depois do checkout.
+# Esta ref foi conferida em ARM64: todas as 11 imagens do compose oficial têm
+# manifesto linux/arm64. Antes de atualizar a ref, confira as imagens novamente;
+# o update automático também precisa continuar funcionando na VPS A1.
 SUPABASE_REF="self-hosted/v0.8.1"
 
 dir_do_supabase() { printf '%s/.runtime/supabase' "${PROJECT_DIR:-$PWD}"; }

@@ -37,7 +37,27 @@ const RAIZ = path.resolve(__dirname, "../..");
 interface Creds {
   password: string;
   users: Record<string, { email: string } | undefined>;
-  agenda?: { tipo_nome: string; tipo_slug: string };
+  agenda?: { tipo_nome: string; tipo_slug: string; fuso?: string };
+}
+
+/**
+ * `HH:mm` de um instante na hora de parede de UM FUSO.
+ *
+ * ⚠️ Não usar `date.toTimeString()` aqui: ele lê o relógio do NAVEGADOR que
+ * roda o teste (UTC no runner do CI), e a grade — corretamente, desde a #1362 —
+ * desenha e rotula no fuso da ORGANIZAÇÃO. Comparar rótulo em fuso da org com
+ * `toTimeString` em fuso do navegador reprova com a diferença de horas (o teste
+ * mediu "12:30" para um "09:30" em América/São_Paulo). Quem lê o instante tem
+ * de formatar no MESMO fuso que produziu o rótulo que ele compara.
+ */
+function rotuloNoFuso(instante: Date, fuso: string): string {
+  const fmt = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: fuso,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  return fmt.format(instante);
 }
 
 function lerCreds(): Creds {
@@ -361,7 +381,13 @@ test("arrastar um card remarca — e o horário novo sobrevive ao reload", async
         );
         const corpo = (await r.json()) as { data?: Array<{ id: string; iniciaEm: string }> };
         const alvoNaApi = (corpo.data ?? []).find((a) => a.id === id);
-        return alvoNaApi ? new Date(alvoNaApi.iniciaEm).toTimeString().slice(0, 5) : "ausente";
+        // ⚠️ Formatar o instante no fuso da ORGANIZAÇÃO, não no do navegador
+        // (`toTimeString()`): a grade rotula no fuso da org (#1362), então a
+        // leitura da API tem de usar o MESMO relógio senão a comparação acusa
+        // +3h (o teste mediu "12:30" para um "09:30" em América/São_Paulo).
+        return alvoNaApi
+          ? rotuloNoFuso(new Date(alvoNaApi.iniciaEm), creds.agenda!.fuso ?? "UTC")
+          : "ausente";
       },
       { timeout: 20_000, message: "o servidor não registrou o horário novo" },
     )

@@ -5908,6 +5908,9 @@ export const DICIONARIO: Traducoes = {
   "Detalhes técnicos (útil se for pedir ajuda)": {
     es: "Detalles técnicos (útil si vas a pedir ayuda)",
   },
+  "O detalhe de cada passada está no arquivo .update.log, na pasta do projeto no servidor.": {
+    es: "El detalle de cada pasada está en el archivo .update.log, en la carpeta del proyecto en el servidor.",
+  },
   "Atualização do sistema": { es: "Actualización del sistema" },
   "Guardando uma cópia de segurança dos seus dados": {
     es: "Guardando una copia de seguridad de tus datos",

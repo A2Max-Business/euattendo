@@ -303,7 +303,17 @@ test("arrastar um card remarca — e o horário novo sobrevive ao reload", async
     "o alvo do arraste é o mesmo bloco de origem — a semana só tem uma vaga e o caso não prova nada",
   ).not.toBe(testidOrigem);
 
-  await alvo.scrollIntoViewIfNeeded();
+  // ⚠️ QUEM TEM DE ESTAR NA TELA É O CARD, não (só) o alvo.
+  //
+  // No fuso da organização o alvo (o primeiro bloco livre, vizinho do card) fica
+  // logo abaixo dele; mas se o card nasce perto do topo do expediente, a âncora
+  // da semana pode deixá-lo DEBAIXO do cabeçalho fixo (ou a rolagem para o alvo
+  // pode jogá-lo para fora da dobra). Nesses casos `caixaCard.y > 0` ainda passa,
+  // e o `pointerdown` em `caixaCard.y + 4` acerta o cabeçalho ou o vazio — o
+  // gesto não começa, o fantasma nunca nasce, e a falha lê "element(s) not
+  // found". Centralizar o CARD garante um ponto de aperto real; o alvo (mesma
+  // coluna, um bloco abaixo) vem junto na mesma rolagem.
+  await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
   const caixaCard = (await card.boundingBox())!;
   const caixaAlvo = (await alvo.boundingBox())!;
   // Sem os dois na tela ao mesmo tempo não há gesto de ponteiro possível — e a
@@ -446,11 +456,18 @@ test("arrastar para fora da disponibilidade é RECUSADO e o card volta", async (
   const distanciaAntes = await distanciaAoBloco();
 
   const bloqueado = blocoBloqueado(page);
-  await bloqueado.scrollIntoViewIfNeeded();
-  const caixaBloqueada = (await bloqueado.boundingBox())!;
-  // Depois de rolar, a caixa do card mudou de lugar na tela — o arraste tem de
-  // partir de onde ele ESTÁ agora, não de onde estava antes do scroll.
+  // ⚠️ QUEM TEM DE ESTAR NA TELA AO APERTAR É O CARD, não o bloqueado.
+  //
+  // A primeira versão rolava só o `bloqueado` e depois lia a caixa do card
+  // (que mora logo acima dele). Quando o card já estava no fim da dobra, esse
+  // scroll o empurrava para FORA da viewport: o `pointerdown` saía num `y`
+  // maior que a altura da tela, o gesto nunca começava, e o fantasma nunca
+  // nascia ("element(s) not found"). Centralizar o CARD, depois reler as duas
+  // caixas, garante que o aperto acerta o card — e o alvo bloqueado é lido na
+  // MESMA rolagem, para onde o ponteiro vai.
+  await card.evaluate((el) => el.scrollIntoView({ block: "center" }));
   const caixaCard = (await card.boundingBox())!;
+  const caixaBloqueada = (await bloqueado.boundingBox())!;
 
   await page.mouse.move(caixaCard.x + caixaCard.width / 2, caixaCard.y + 4);
   await page.mouse.down();

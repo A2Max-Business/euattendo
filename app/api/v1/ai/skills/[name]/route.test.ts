@@ -117,7 +117,7 @@ describe("DELETE /api/v1/ai/skills/[name]", () => {
 
 function makeAdminGetStub(input: {
   pointer: { version_id: string; updated_at: string } | null;
-  version?: { id: string; name: string; description: string; body: string; matcher: unknown; manifest?: unknown[] } | null;
+  version?: { id: string; name: string; description: string; body: string; matcher: unknown; manifest?: unknown[]; forked_from_version_id?: string | null } | null;
 }) {
   return {
     from(table: string) {

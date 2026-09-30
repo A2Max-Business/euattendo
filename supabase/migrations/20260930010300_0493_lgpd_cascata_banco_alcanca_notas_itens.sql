@@ -214,25 +214,23 @@ language sql
 immutable
 set search_path = public, pg_temp
 as $t$
-  select coalesce(
-    jsonb_agg(
-      jsonb_strip_nulls(jsonb_build_object(
-        'step', case when jsonb_typeof(s->'step') = 'number' then s->'step' end,
-        'tool_name', case when jsonb_typeof(s->'tool_name') = 'string' then s->'tool_name' end,
-        'redacted', true,
-        'tool_calls', coalesce((
-          select jsonb_agg(jsonb_build_object('tool_name', coalesce(c->>'tool_name', 'unknown')))
-            from jsonb_array_elements(s->'tool_calls') c
-        ), '[]'::jsonb)
-      ) order by s.ord)
-    ),
-    '[]'::jsonb
-  )
-  from (
-    select value as s, ordinality as ord
-      from jsonb_array_elements(coalesce(p_tool_calls, '[]'::jsonb)) with ordinality
-  ) s;
+  select coalesce(jsonb_agg(t.step_json order by t.ord), '[]'::jsonb)
+    from (
+      select jsonb_strip_nulls(jsonb_build_object(
+               'step', case when jsonb_typeof(s.step ->> 'step') = 'number'
+                            then (s.step ->> 'step')::jsonb end,
+               'tool_name', case when jsonb_typeof(s.step ->> 'tool_name') = 'string'
+                                 then to_jsonb(s.step ->> 'tool_name') end,
+               'redacted', true,
+               'tool_calls', coalesce((
+                 select jsonb_agg(jsonb_build_object('tool_name', coalesce(c ->> 'tool_name', 'unknown')))
+                   from jsonb_array_elements(s.step -> 'tool_calls') c
+               ), '[]'::jsonb) ) as step_json,
+             s.ord
+        from jsonb_array_elements(coalesce(p_tool_calls, '[]'::jsonb)) with ordinality s(step, ord)
+    ) t;
 $t$;
+
 
 revoke execute on function public.fn_lgpd_redigir_tool_calls(jsonb) from public, anon, authenticated;
 

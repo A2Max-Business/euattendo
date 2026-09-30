@@ -80,6 +80,8 @@ mkdir -p "$WORK/bin"
 cat > "$WORK/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$DOCKER_LOG"
+# O WAHA que o compose vai puxar: o ambiente vence o .env no compose.
+case " $* " in *" pull"*) printf 'ambiente WAHA_IMAGE=%s\n' "${WAHA_IMAGE:-}" >> "$DOCKER_LOG" ;; esac
 case " $* " in
   # O overlay de build local: build e up são sucesso por definição aqui, e é a
   # diferença entre as DUAS chamadas de `up -d` que o update.sh faz.
@@ -301,6 +303,34 @@ check "a voz recebe a mesma versão do app" \
   grep -q "^VOICE_AGENT_IMAGE=${NS}/deskcomm-voice-agent:0.9.0$" "$ENV3B"
 check "a atualização preserva o WAHA ARM64 escolhido na instalação" \
   grep -q '^WAHA_IMAGE=devlikeapro/waha:noweb-arm-2026.7.2$' "$ENV3B"
+
+# ─────────────────────────────────────────────────────────────────────────────
+echo
+echo '── 3c. ARM64 que já roda com o WAHA amd64 do install.sh antigo passa para o NOWEB ARM64'
+# O install.sh antigo gravava `latest-2026.7.2`, cujo índice só tem linux/amd64.
+# A troca mora em `gravar_imagens`, que o update.sh chama depois de reler o kit.
+R3C="$WORK/caso3c"; mkdir -p "$R3C"
+montar_instalacao "$R3C" 0 '"devlikeapro/waha:latest-2026.7.2"'
+OUT3C="$WORK/saida3c.txt"
+rodar_update "$R3C" aarch64 0 "$OUT3C"; RC3C="$RC"
+ENV3C="$R3C/deskcommcrm/.env"
+check "em ARM64 com WAHA amd64 o update.sh sai com 0 (rc=$RC3C)" test "$RC3C" -eq 0
+check "o .env passa a ter o WAHA NOWEB ARM64" \
+  grep -q '^WAHA_IMAGE=devlikeapro/waha:noweb-arm-2026.7.2$' "$ENV3C"
+check "e só uma linha de WAHA_IMAGE" test "$(grep -c '^WAHA_IMAGE=' "$ENV3C")" -eq 1
+check "o pull já sai com o WAHA ARM64 no ambiente (o ambiente vence o .env)" \
+  grep -q '^ambiente WAHA_IMAGE=devlikeapro/waha:noweb-arm-2026.7.2$' "$DOCKER_LOG"
+check "a troca é anunciada numa linha" grep -q 'WAHA trocado para a variante oficial ARM64' "$OUT3C"
+
+R3D="$WORK/caso3d"; mkdir -p "$R3D"
+montar_instalacao "$R3D" 0 devlikeapro/waha-plus:2026.7.2
+OUT3D="$WORK/saida3d.txt"
+rodar_update "$R3D" aarch64 0 "$OUT3D"; RC3D="$RC"
+check "em ARM64 um WAHA escolhido pelo operador fica intacto (rc=$RC3D)" \
+  grep -q '^WAHA_IMAGE=devlikeapro/waha-plus:2026.7.2$' "$R3D/deskcommcrm/.env"
+
+check "em x86_64 o WAHA amd64 não muda" \
+  grep -q '^WAHA_IMAGE=devlikeapro/waha:latest-2026.7.2$' "$R3/deskcommcrm/.env"
 
 # ─────────────────────────────────────────────────────────────────────────────
 echo

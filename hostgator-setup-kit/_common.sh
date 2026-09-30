@@ -43,6 +43,19 @@ imagem_waha_padrao_para_host() {
   esac
 }
 
+# Quem já roda em ARM (#1266) tem no .env o WAHA que o install.sh antigo
+# gravava — `devlikeapro/waha` e, desde 13/08/2026, `latest-2026.7.2` —, e os
+# dois índices só têm linux/amd64. Troca SÓ esses valores conhecidos (e o vazio,
+# em que o default do compose seria o amd64); qualquer outra escolha do
+# operador, WAHA Plus inclusive, fica intacta. Pura no argumento, como a de cima.
+waha_amd64_conhecido_em_arm() {  # waha_amd64_conhecido_em_arm <arquitetura> <WAHA_IMAGE do .env> → 0 = trocar
+  case "${1:-}" in aarch64|arm64) ;; *) return 1 ;; esac
+  case "${2:-}" in
+    ""|devlikeapro/waha|devlikeapro/waha:latest|devlikeapro/waha:latest-2026.7.2) return 0 ;;
+  esac
+  return 1
+}
+
 # ── JÁ EXISTE UMA INSTALAÇÃO REAL AQUI? (#1266, corrigido pelo #1778) ───────
 #
 # A guarda do #1042 vivia no TOPO dos dois scripts, e por isso matava antes de
@@ -1498,6 +1511,19 @@ gravar_imagens() {
   # não no `stable` móvel do default do compose.
   set_env_var "$envfile" VOICE_AGENT_IMAGE       "${IMG_VOICE_AGENT}:${versao}"
   set_env_var "$envfile" VOICE_AGENT_PULL_POLICY "$politica"
+  # O WAHA de quem já roda em ARM mora AQUI, e não numa linha do update.sh: é
+  # esta função que o update.sh ANTIGO chama depois de reler o kit, então é
+  # assim que a troca chega já na atualização que a traz. O export vale porque
+  # o compose prefere a variável do ambiente (que o enter_project exportou com o
+  # valor velho) à do .env.
+  local waha_atual
+  waha_atual="$(sed -n 's/^WAHA_IMAGE=//p' "$envfile" 2>/dev/null | tail -1 | tr -d "\"'")"
+  if waha_amd64_conhecido_em_arm "$(uname -m 2>/dev/null || true)" "$waha_atual"; then
+    WAHA_IMAGE="$(imagem_waha_padrao_para_host)"
+    export WAHA_IMAGE
+    set_env_var "$envfile" WAHA_IMAGE "$WAHA_IMAGE"
+    c_ylw "$(t "  (WAHA trocado para a variante oficial ARM64: {1})" "$WAHA_IMAGE")"
+  fi
 }
 
 # ── Os segredos da chamada de voz, no .env de quem já tinha instalado ────────

@@ -217,29 +217,29 @@ describe("paraEventoDoGoogle", () => {
     ).toThrow(/participante sem e-mail/);
   });
 
-  it("⚠️ nunca vaza a anotação INTERNA (notes) para o Google", () => {
-    // ─── A CERCA (#1959) ──────────────────────────────────────────────────
-    // A entrada `AgendamentoParaGoogle` NÃO tem o campo `notes` — por construção
-    // de tipo já é impossível vazar por aqui. A cerca é para o futuro: um
-    // refactor que acrescente `notes` ao snapshot (o `sync-store.ts` já passou
-    // por isso) e o espalhe via `...a` reabriria o vazamento sem o TypeScript
-    // culpar ninguém. Este caso tranca QUE O EVENTO NÃO LEVA O TEXTO INTERNO,
-    // em nenhum campo — nem `description`, nem um campo que um futuro `...a`
-    // criasse no corpo.
+  // ─── A CERCA (#1959) ────────────────────────────────────────────────────
+  // `AgendamentoParaGoogle` não tem `notes`, mas o `sync-executor.ts` chama esta
+  // função com `{ ...a, ... }` — o snapshot inteiro. Se o snapshot voltar a
+  // carregar `notes`, ele CHEGA aqui em tempo de execução, e o TypeScript não
+  // acusa nada (nem se os dois tipos ganharem o campo: medido). A cerca é de
+  // runtime. O caso sem observação é o que importa: foi exatamente o
+  // `a.description?.trim() || a.notes?.trim()` da #1959.
+  it.each([
+    ["com observação visível", "Primeira consulta", "Primeira consulta"],
+    ["sem observação (null)", null, undefined],
+    ["com observação em branco", "   ", undefined],
+  ])("⚠️ nunca vaza a anotação INTERNA (notes) para o Google — %s", (_rotulo, description, esperada) => {
     const comNotaInterna = {
-      ...agendamento(),
+      ...agendamento({ description }),
       notes: "queixa clínica: paciente com ansiedade e dor torácica recorrente",
     } as unknown as AgendamentoParaGoogle;
     const corpo = paraEventoDoGoogle(comNotaInterna);
+    expect(corpo.description).toBe(esperada);
+    // Nenhum campo do corpo pode carregar o texto interno — pega também um
+    // espalhamento (`...a`) que criasse uma chave nova.
     const serializa = JSON.stringify(corpo);
-    expect(corpo.description).toBe("Primeira consulta"); // a visível é a do agendamento
-    expect(corpo.description).not.toContain("queixa clínica");
-    // Nenhum campo do corpo pode carregar o texto interno — pega até um
-    // espalhamento futuro (`...a`) que criasse uma chave nova.
     expect(serializa).not.toContain("queixa clínica");
     expect(serializa).not.toContain("dor torácica");
-    // Campo `notes` não existe no corpo tipado — se um dia existir, o teste
-    // para de compilar (e é exatamente o que queremos).
     expect("notes" in corpo).toBe(false);
   });
 });

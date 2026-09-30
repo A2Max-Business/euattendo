@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { redigirToolCalls } from "@/lib/lgpd/cascata";
+
 import { sql } from "./gov-helpers";
 
 /**
@@ -196,5 +198,27 @@ describe("LGPD: a cascata do banco alcança as quatro fontes na virada de is_ano
     expect(notaDo(ALVO)).toBe("(anonimizado)|(anonimizado)|<null>");
     expect(toolCallsDo(ALVO)).not.toContain("Bruno");
     expect(socialDo(ALVO)).toBe("<null>");
+  });
+
+  it("o espelho SQL de redigirToolCalls devolve o MESMO jsonb que a app", () => {
+    // Se os dois divergirem, a varredura diária da app (toolCallsPendentes) e o
+    // gatilho do banco discordam sobre o que é "já redigido" e reescrevem um ao
+    // outro. Entradas bem formadas, na forma de lib/ai/runtime/serialize.ts.
+    const entradas: unknown[] = [
+      [],
+      [{ step: 1, text: "buscando Bruno", tool_calls: [{ tool_name: "crm_get_lead", args: { name: "Bruno" } }] }],
+      [
+        { step: 2, tool_name: "responder", tool_calls: [] },
+        { text: "sem step", tool_calls: [{ args: { x: 1 } }, { tool_name: "crm_create_activity" }] },
+        { step: 3 },
+      ],
+    ];
+    for (const entrada of entradas) {
+      const literal = JSON.stringify(entrada).replace(/'/g, "''");
+      const doBanco: unknown = JSON.parse(
+        sql(`select public.fn_lgpd_redigir_tool_calls('${literal}'::jsonb)::text;`).trim(),
+      );
+      expect(doBanco).toEqual(redigirToolCalls(entrada));
+    }
   });
 });

@@ -111,12 +111,12 @@ begin
   -- Fica QUAIS ferramentas rodaram e em que passo; sai o texto do modelo, os
   -- argumentos e os resultados. Guard no WHERE: só corre quando há passo sem
   -- `redacted`, então o `[]` de nascença e a run já redigida não são tocados.
-  update public.ai_agent_runs r set
-    tool_calls = public.fn_lgpd_redigir_tool_calls(r.tool_calls)
-  where r.organization_id = new.organization_id
-    and r.contact_id = new.id
+  update public.ai_agent_runs set
+    tool_calls = public.fn_lgpd_redigir_tool_calls(ai_agent_runs.tool_calls)
+  where ai_agent_runs.organization_id = new.organization_id
+    and ai_agent_runs.contact_id = new.id
     and exists (
-      select 1 from jsonb_array_elements(r.tool_calls) s
+      select 1 from jsonb_array_elements(ai_agent_runs.tool_calls) s
        where coalesce(s->>'redacted', 'false')::boolean is not true
     );
 

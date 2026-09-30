@@ -452,6 +452,9 @@ describe('#1943 — turno descartado como resposta obsoleta não emite a pergunt
     const enviaRoteiro = src.indexOf('!perguntaDoRoteiroPodeSair(');
     const marcaDescarte = src.indexOf('turnoDescartado = true');
     expect(marcaDescarte).toBeGreaterThan(0);
+    // Uma só atribuição, e DENTRO da guarda: depois da chamada da régua.
+    expect(src.split('turnoDescartado = true').length - 1).toBe(1);
+    expect(marcaDescarte).toBeGreaterThan(src.indexOf('await respostaFicouObsoleta('));
     expect(marcaDescarte).toBeLessThan(guarda); // liga ANTES de devolver resposta_obsoleta
     expect(enviaRoteiro).toBeGreaterThan(guarda); // o enviar do roteiro lê o descarte
     const tornoDoEnviar = src.slice(enviaRoteiro, enviaRoteiro + 200);

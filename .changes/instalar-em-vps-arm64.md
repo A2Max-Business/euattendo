@@ -4,4 +4,6 @@ secao: adicionado
 titulo: Instalação em VPS ARM64
 ---
 
-O instalador padrão agora atende VPS ARM64/aarch64, como Oracle Ampere A1, usando as imagens nativas do DeskcommCRM e a variante NOWEB ARM64 oficial do WAHA. O caminho usa Supabase externo e não exige compilação na VPS. O instalador alternativo que hospeda o Supabase junto continua limitado a amd64.
+O instalador agora atende VPS ARM64/aarch64, como Oracle Ampere A1, AWS Graviton e Hetzner CAX, inclusive no modo com Supabase na mesma VPS. As imagens do DeskcommCRM são construídas em máquina ARM nativa e publicadas na mesma tag das de amd64, e o WAHA usa a variante oficial NOWEB ARM64 (`devlikeapro/waha:noweb-arm-2026.7.2`). Nada é compilado na VPS. Quem já roda em ARM passa a atualizar pelas imagens publicadas, e o `update.sh` troca no `.env` o WAHA amd64 antigo pela variante ARM (um valor escolhido à mão fica intacto). Em amd64 nada muda.
+
+Contribuição de @mauriciobera1990-droid (#1938).

@@ -1003,37 +1003,15 @@ CREATE TABLE IF NOT EXISTS "public"."ai_agent_versions" (
     "superseded_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "created_by" "uuid",
-    "inbound_debounce_ms" integer,
     CONSTRAINT "ai_agent_versions_cost_budget_cents_check" CHECK ((("cost_budget_cents" >= 1) AND ("cost_budget_cents" <= 10000))),
     CONSTRAINT "ai_agent_versions_max_steps_check" CHECK ((("max_steps" >= 1) AND ("max_steps" <= 25))),
     CONSTRAINT "ai_agent_versions_provider_check" CHECK (("provider" = ANY (ARRAY['anthropic'::"text", 'openai'::"text", 'google'::"text"]))),
     CONSTRAINT "ai_agent_versions_status_check" CHECK (("status" = ANY (ARRAY['draft'::"text", 'published'::"text", 'superseded'::"text", 'archived'::"text"]))),
-    CONSTRAINT "ai_agent_versions_token_budget_check" CHECK ((("token_budget" >= 1000) AND ("token_budget" <= 500000))),
-    CONSTRAINT "ai_agent_versions_inbound_debounce_ms_check" CHECK ((("inbound_debounce_ms" IS NULL) OR (("inbound_debounce_ms" >= 0) AND ("inbound_debounce_ms" <= 60000))))
+    CONSTRAINT "ai_agent_versions_token_budget_check" CHECK ((("token_budget" >= 1000) AND ("token_budget" <= 500000)))
 );
 
 
 ALTER TABLE "public"."ai_agent_versions" OWNER TO "postgres";
-
-
--- ═══ Apêndice 0498 — debounce de rajada configurável por agente ═══
--- O kit self-host aplica SÓ o baseline: quem já instalou antes da 0498 não tem
--- a coluna na tabela (o `create table if not exists` acima não a altera).
--- Este apêndice idempotente é o que leva a coluna nova à instalação existente
--- no `update.sh`, junto do par drop/add da CHECK (o 0498 MP pode já ter sido
--- aplicado e a constraint sem guarda quebraria com 'already exists').
-alter table public."ai_agent_versions"
-  drop constraint if exists ai_agent_versions_inbound_debounce_ms_check;
-
-alter table public."ai_agent_versions"
-  add column if not exists inbound_debounce_ms integer;
-
-comment on column public."ai_agent_versions".inbound_debounce_ms is
-  'Janela de coalescência de rajada inbound em ms para ESTE agente. NULL = usa o INBOUND_DEBOUNCE_MS da instalação; 0 = desliga a coalescência; teto 60s.';
-
-alter table public."ai_agent_versions"
-  add constraint ai_agent_versions_inbound_debounce_ms_check
-  check (inbound_debounce_ms is null or (inbound_debounce_ms >= 0 and inbound_debounce_ms <= 60000));
 
 
 CREATE TABLE IF NOT EXISTS "public"."ai_agents" (
@@ -45276,3 +45254,22 @@ update public.agent_inbox_items i
 create unique index if not exists agent_inbox_event_dead_aberto_unico
   on public.agent_inbox_items (organization_id, kind, title)
   where status = 'open' and kind = 'event_dead';
+
+-- ---- janela de rajada configurável por agente (migration 0498) ----
+-- 0498 (#1856, de @webtecnica): a janela que junta mensagens do MESMO contato
+-- numa resposta sai da env global `INBOUND_DEBOUNCE_MS` e vira campo da versão
+-- do agente. NULL = usa a env da instalação (quem só atualiza não muda nada);
+-- 0 desliga; teto 60s. Par drop/add da CHECK para o `update.sh` reaplicar sem
+-- 'already exists'. Sem função nova (nada a revogar de anon).
+alter table public.ai_agent_versions
+  drop constraint if exists ai_agent_versions_inbound_debounce_ms_check;
+
+alter table public.ai_agent_versions
+  add column if not exists inbound_debounce_ms integer;
+
+comment on column public.ai_agent_versions.inbound_debounce_ms is
+  'Janela de coalescência de rajada inbound em ms para ESTE agente. NULL = usa o INBOUND_DEBOUNCE_MS da instalação; 0 = desliga a coalescência; teto 60s.';
+
+alter table public.ai_agent_versions
+  add constraint ai_agent_versions_inbound_debounce_ms_check
+  check (inbound_debounce_ms is null or (inbound_debounce_ms >= 0 and inbound_debounce_ms <= 60000));

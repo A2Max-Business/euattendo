@@ -1,15 +1,16 @@
 /**
- * A janela de RESPOSTA é diferente da janela de DISPARO (migration 0381).
+ * A janela de RESPOSTA é diferente da janela de DISPARO (migration 0495).
  *
- * O dono pediu: responder a qualquer hora, NUNCA disparar nem cortar conversa
- * parada fora do horário comercial. Antes da 0381 as duas coisas liam o mesmo
- * par de horas de disparo, então abrir o atendimento para 24h abria o disparo
- * junto — exatamente o que não foi pedido.
+ * Responder a quem escreveu pode sair a qualquer hora; disparo, prospecção e
+ * retomada de conversa parada, não. Antes da 0495 as duas coisas liam o mesmo
+ * par de horas de disparo, então abrir o atendimento para 24h abria o disparo junto.
  *
  * Estes testes existem para travar a SEPARAÇÃO, não o padrão: se alguém voltar
  * a ler as horas de DISPARO no caminho da resposta, este arquivo reprova.
  */
 import { describe, expect, it } from 'vitest';
+
+import { effectiveKnobs, type ChannelKnobsRow } from '@/lib/ai/pacing-knobs';
 
 import { PACING_DEFAULTS, type PacingKnobs } from './defaults';
 import {
@@ -42,16 +43,21 @@ const knobs = (over: Partial<PacingKnobs> = {}): PacingKnobs => ({
 
 const estado = { lastSentAt: null, sentToday: 0, numberActivatedAt: null };
 
-describe('janela de resposta separada da janela de disparo (0381)', () => {
+const LINHA_VAZIA: ChannelKnobsRow = {
+  throttle_ms: null, jitter_max_ms: null, window_start_hour: null, window_end_hour: null,
+  allow_sunday: null, timezone: null, warmup_daily_caps: null,
+};
+
+describe('janela de resposta separada da janela de disparo (0495)', () => {
   it('a 3h a resposta é liberada e o disparo é barrado', () => {
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24 });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
 
     expect(janelaDeEnvioAberta(AS_3H, k, true)).toBe(true);
     expect(janelaDeEnvioAberta(AS_3H, k, false)).toBe(false);
   });
 
   it('o mesmo número de knobs decide diferente conforme o tipo de envio', () => {
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24 });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
 
     const resposta = decidePacing({
       now: AS_3H, knobs: k, state: estado, crmDailyLimit: null, resposta: true,
@@ -66,37 +72,44 @@ describe('janela de resposta separada da janela de disparo (0381)', () => {
   });
 
   it('omitir `resposta` é DISPARO — a direção que fecha o número', () => {
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24 });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
     // O chamador que esquece o campo não pode abrir o número às 3h.
     expect(janelaDeEnvioAberta(AS_3H, k)).toBe(false);
     expect(decidePacing({ now: AS_3H, knobs: k, state: estado, crmDailyLimit: null }).allow).toBe(false);
   });
 
   it('dentro do horário comercial os dois são liberados', () => {
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24 });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
     expect(janelaDeEnvioAberta(AS_10H, k, true)).toBe(true);
     expect(janelaDeEnvioAberta(AS_10H, k, false)).toBe(true);
   });
 
-  it('sem `reengajar*` gravado, a resposta herda a janela do disparo', () => {
-    // Clone que rodou a 0381 sem gravar as colunas: `undefined` cai no par de
-    // disparo, que é o comportamento de sempre — não vira 0-24 sozinho.
-    const k = knobs({ reengajarStartHour: undefined as unknown as number, reengajarEndHour: undefined as unknown as number });
+  it('coluna vazia no banco: a resposta herda a janela de disparo', () => {
+    // O caminho real: `null` em `resposta_*` vira o par `window_*` na leitura
+    // (`effectiveKnobs`, mesma regra de `loadChannelKnobs`). Não vira 0-24 sozinho.
+    const k = effectiveKnobs({
+      ...LINHA_VAZIA, window_start_hour: 9, window_end_hour: 18,
+      resposta_start_hour: null, resposta_end_hour: null,
+    });
+    expect([k.respostaStartHour, k.respostaEndHour]).toEqual([9, 18]);
     expect(janelaDeEnvioAberta(AS_3H, k, true)).toBe(false);
     expect(janelaDeEnvioAberta(AS_10H, k, true)).toBe(true);
   });
 
-  it('par de resposta incompleto (só o início) não abre a janela', () => {
-    // Gravar só `reengajar_start_hour=0` e deixar o fim vazio é configuração
-    // pela metade. A resposta NÃO pode virar 0h-infinito por acidente.
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: undefined as unknown as number });
-    expect(janelaDeEnvioAberta(AS_3H, k, true)).toBe(false);
+  it('o fallback é coluna a coluna, igual ao que a tela mostra no placeholder', () => {
+    // Só o início gravado: o fim segue o do disparo. É o que a ficha Anti-ban
+    // exibe no campo vazio, então o operador vê a janela que o motor aplica.
+    const k = effectiveKnobs({
+      ...LINHA_VAZIA, window_start_hour: 7, window_end_hour: 22,
+      resposta_start_hour: 0, resposta_end_hour: null,
+    });
+    expect([k.respostaStartHour, k.respostaEndHour]).toEqual([0, 22]);
   });
 
   it('o veto da RESPOSTA atrasa para a abertura da resposta, não 7h', () => {
     // Resposta com janela própria 9h-21h: fora dela, o adiado é 9h, não o
     // `window_start_hour` do disparo. É o que o dono vê no painel.
-    const k = knobs({ reengajarStartHour: 9, reengajarEndHour: 21 });
+    const k = knobs({ respostaStartHour: 9, respostaEndHour: 21 });
     const d = decidePacing({
       now: AS_3H, knobs: k, state: estado, crmDailyLimit: null, resposta: true, rng: () => 0,
     });
@@ -109,7 +122,7 @@ describe('janela de resposta separada da janela de disparo (0381)', () => {
   });
 
   it('o veto do DISPARO continua citando a janela de disparo', () => {
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24 });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
     const d = decidePacing({
       now: AS_3H, knobs: k, state: estado, crmDailyLimit: null, resposta: false, rng: () => 0,
     });
@@ -122,7 +135,7 @@ describe('janela de resposta separada da janela de disparo (0381)', () => {
 
   it('cap diário continua valendo na RESPOSTA — 24h não é sem limite', () => {
     // A janela é cortesia; o anti-ban (cap, warm-up, throttle) não abre junto.
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24 });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
     const d = decidePacing({
       now: AS_3H, knobs: k, state: { ...estado, sentToday: 999 }, crmDailyLimit: null, resposta: true,
     });
@@ -131,24 +144,33 @@ describe('janela de resposta separada da janela de disparo (0381)', () => {
   });
 
   it('domingo desligado cala a resposta também (knob único, sem par)', () => {
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24, allowSunday: false });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24, allowSunday: false });
     const domingo = new Date('2026-10-04T12:00:00-03:00'); // domingo
     expect(janelaDeEnvioAberta(domingo, k, true)).toBe(false);
   });
 
   it('o padrão do repositório continua espelhando a janela de disparo', () => {
-    // Se este teste quebrar, todo clone que não gravou `reengajar_*` mudou de
+    // Se este teste quebrar, todo clone que não gravou `resposta_*` mudou de
     // comportamento sem ninguém pedir.
-    expect(PACING_DEFAULTS.reengajarStartHour).toBe(PACING_DEFAULTS.windowStartHour);
-    expect(PACING_DEFAULTS.reengajarEndHour).toBe(PACING_DEFAULTS.windowEndHour);
+    expect(PACING_DEFAULTS.respostaStartHour).toBe(PACING_DEFAULTS.windowStartHour);
+    expect(PACING_DEFAULTS.respostaEndHour).toBe(PACING_DEFAULTS.windowEndHour);
   });
 
   it('proximaAberturaDaJanela segue a janela do tipo de envio', () => {
-    const k = knobs({ reengajarStartHour: 0, reengajarEndHour: 24 });
+    const k = knobs({ respostaStartHour: 0, respostaEndHour: 24 });
     // Às 21h, para o disparo só amanhã 7h; para a resposta, amanhã 0h.
     const paraDisparo = proximaAberturaDaJanela(AS_21H, k, false, () => 0);
     const paraResposta = proximaAberturaDaJanela(AS_21H, k, true, () => 0);
     expect(horaNoFuso(paraDisparo)).toBe(7);
     expect(horaNoFuso(paraResposta)).toBe(0);
+  });
+});
+describe('quem lê a janela de resposta (0495)', () => {
+  it('só o turno que reage a quem escreveu é resposta', async () => {
+    const { eTurnoDeResposta } = await import('@/lib/agent-engine/agent/inbound-turn');
+    expect(eTurnoDeResposta({ kind: 'inbound_turn' })).toBe(true);
+    expect(eTurnoDeResposta({ kind: 'case_reply_turn' })).toBe(true);
+    // Retomar conversa parada às 4h é o que a janela de disparo existe para barrar.
+    expect(eTurnoDeResposta({ kind: 'followup_turn' })).toBe(false);
   });
 });

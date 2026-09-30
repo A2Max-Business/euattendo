@@ -1793,6 +1793,20 @@ export async function runAgentTurn(
  *     planejamento: não abrem o WhatsApp de ninguém.
  *   * `operator_turn` — retaguarda (mexe no funil), nunca fala com o lead.
  */
+/**
+ * ═══ RESPOSTA vs RETOMADA — a distinção que a janela da 0495 faz ═══
+ *
+ * `turnoVaiFalarComOLead` admite `followup_turn`, que RETOMA conversa parada — e
+ * retomar NÃO é responder: abrir `followup_turn` junto faria o número mandar
+ * "e aí, tudo certo?" às 4h para quem dormiu.
+ *
+ * Só a REAÇÃO a uma mensagem recebida lê a janela de resposta. `case_reply_turn`
+ * entra porque responde a um caso em aberto: ninguém "chama" um caso, o caso chama.
+ */
+export function eTurnoDeResposta(job: Pick<JobRow, 'kind'>): boolean {
+  return job.kind === 'inbound_turn' || job.kind === 'case_reply_turn';
+}
+
 function turnoVaiFalarComOLead(job: JobRow): boolean {
   if (job.kind === 'inbound_turn' || job.kind === 'case_reply_turn') return true;
   if (job.kind !== 'followup_turn') return false;
@@ -1930,26 +1944,12 @@ async function executarTurnoDoAgente(
   // Só a JANELA adia. Cap diário e warm-up continuam com o gate de envio: eles
   // dependem de quanto já saiu hoje, e antecipá-los aqui adiaria turno que, na
   // hora do envio, teria passado.
-  // ═══ RESPOSTA vs CUTUCAR — a distinção que a janela de 0381 faz ═══
-  //
-  // `turnoVaiFalarComOLead` (guarda acima) admite `followup_turn`, que é a CUTUCAR
-  // de conversa parada — e cutucar NÃO é responder. O dono foi explícito:
-  // responder 24h, nunca disparar nem puxar conversa. Abrir `followup_turn` junto
-  // faria o número mandar "e aí, tudo certo?" às 4h para quem dormiu.
-  //
-  // Só a REAÇÃO a uma mensagem recebida vale `resposta: true`. `case_reply_turn`
-  // entra porque é resposta a um caso em aberto (o atendente/documento), não
-  // cutucar: ninguém "chama" um caso, o caso chama.
-  const eResposta = (j: JobRow): boolean =>
-    j.kind === 'inbound_turn' || j.kind === 'case_reply_turn';
-
   if (!preview && turnoVaiFalarComOLead(liveJob())) {
     const { knobs } = await loadChannelKnobs(pool, tenantId, input.channelSessionId, runLog);
     const agora = clock();
-    const resposta = eResposta(liveJob());
-    // `resposta` separa as janelas: reação a quem escreveu lê `reengajar*`
-    // (0381, por padrão 0h-24h = o dono pediu); cutucar e disparo em massa leem
-    // `window*` (7h-22h, inalterado). É este o ponto único onde as duas saem.
+    const resposta = eTurnoDeResposta(liveJob());
+    // `resposta` separa as janelas: reação a quem escreveu lê `resposta*` (0495,
+    // que herda `window*` quando vazia); retomada e disparo leem `window*`.
     if (!janelaDeEnvioAberta(agora, knobs, resposta)) {
       const abertura = proximaAberturaDaJanela(agora, knobs, resposta);
       await rescheduleJob(pool, liveJob().id, ctx.workerId, {
@@ -1958,8 +1958,8 @@ async function executarTurnoDoAgente(
         reason: 'fora da janela anti-ban de envio — turno adiado para a abertura',
       });
       runLog.info('turno adiado — fora da janela anti-ban de envio', {
-        janela: `${resposta ? knobs.reengajarStartHour : knobs.windowStartHour}h-${resposta ? knobs.reengajarEndHour : knobs.windowEndHour}h`,
-        tipo: resposta ? 'resposta' : 'cutucar',
+        janela: `${resposta ? knobs.respostaStartHour : knobs.windowStartHour}h-${resposta ? knobs.respostaEndHour : knobs.windowEndHour}h`,
+        tipo: resposta ? 'resposta' : 'retomada',
         timezone: knobs.timezone,
         abertura: abertura.toISOString(),
       });
@@ -1976,7 +1976,7 @@ async function executarTurnoDoAgente(
           tenantId,
           channelSessionId: input.channelSessionId,
           abertura,
-          janela: `${resposta ? knobs.reengajarStartHour : knobs.windowStartHour}h-${resposta ? knobs.reengajarEndHour : knobs.windowEndHour}h`,
+          janela: `${resposta ? knobs.respostaStartHour : knobs.windowStartHour}h-${resposta ? knobs.respostaEndHour : knobs.windowEndHour}h`,
           timezone: knobs.timezone,
           domingoDesligado: !knobs.allowSunday,
         });
@@ -2876,9 +2876,8 @@ async function executarTurnoDoAgente(
           // Só ESTE gate muda; stop, LGPD e pacing continuam valendo integralmente.
           isTemplate: true,
           optedOutThisTurn,
-          // Resposta do turno, mesmo sendo template: quem escreveu espera volta
-          // a qualquer hora (0381). Só o disparo em massa usa a janela comercial.
-          resposta: eResposta(liveJob()),
+          // Resposta do turno, mesmo sendo template: lê a janela de resposta (0495).
+          resposta: eTurnoDeResposta(liveJob()),
           crmDailyLimit: null,
           now: clock(),
           sleep: deps.sleep,
@@ -3094,10 +3093,9 @@ async function executarTurnoDoAgente(
             body,
             optedOutThisTurn,
             // `inbound_turn`/`case_reply_turn` respondem a quem escreveu e leem a
-            // janela de RESPOSTA (0381, 0h-24h nesta instalação). `followup_turn`
-            // é cutucar de conversa parada e continua na janela de DISPARO: o dono
-            // pediu responder 24h, nunca puxar conversa.
-            resposta: eResposta(liveJob()),
+            // janela de RESPOSTA (0495). `followup_turn` retoma conversa parada e
+            // continua na janela de DISPARO.
+            resposta: eTurnoDeResposta(liveJob()),
             // ponytail: channel_sessions.daily_message_limit do CRM ainda não é lido
             // no runtime — null cai nos degraus de warm-up (conservadores). Injetar
             // aqui quando o drain expuser o limite da sessão.
@@ -4284,6 +4282,9 @@ async function executarTurnoDoAgente(
               channelSessionId: input.channelSessionId,
               body: texto,
               optedOutThisTurn,
+              // Sai no MESMO turno da resposta: sem isto, às 3h com a janela de
+              // resposta aberta, o agente responde e a pergunta do roteiro é vetada.
+              resposta: eTurnoDeResposta(liveJob()),
               crmDailyLimit: null,
               // A pergunta repete por design (foi feita e não respondida); o
               // anti-blast vetaria justamente o que esta trava garante. Mesmo

@@ -126,17 +126,17 @@ export interface GateContext {
     crmDailyLimit: number | null;
     rng?: () => number;
     /**
-     * Este envio é RESPOSTA a uma mensagem recebida, ou disparo/cutucar?
+     * Este envio é RESPOSTA a uma mensagem recebida, ou disparo/retomada?
      *
      * ⚠️ OMITIDO = disparo (janela `window*`, 7h-22h). É o default que mantém
-     * todo chamador que não conhece a 0381 no comportamento antigo, e é a
+     * todo chamador que não conhece a 0495 no comportamento antigo, e é a
      * direção segura: quem esquece o campo continua preso ao horário comercial
      * em vez de abrir o número às 3h.
      *
      * O `inbound_turn` (cliente escreveu) e o `case_reply_turn` passam `true` e leem
-     * `reengajar*`. O disparo em massa NÃO passa por este gate — ele usa
+     * `resposta*`. O disparo em massa NÃO passa por este gate — ele usa
      * `decidePacing` direto (`lib/prospecting/worker.ts`) — então o valor aqui
-     * só distingue resposta de cutucar de follow-up.
+     * só distingue resposta de retomada por follow-up.
      */
     resposta?: boolean;
   };
@@ -910,9 +910,9 @@ export interface RunBeforeSendArgs {
    */
   crmDailyLimit: number | null;
   /**
-   * Este envio é RESPOSTA a uma mensagem recebida (janela `reengajar*`, 0381) ou
-   * disparo/cutucar (janela `window*`)? OMITIDO = disparo — o default que deixa
-   * todo chamador anterior à 0381 no comportamento antigo.
+   * Este envio é RESPOSTA a uma mensagem recebida (janela `resposta*`, 0495) ou
+   * disparo/retomada (janela `window*`)? OMITIDO = disparo — o default que deixa
+   * todo chamador anterior à 0495 no comportamento antigo.
    */
   resposta?: boolean;
   now: Date;

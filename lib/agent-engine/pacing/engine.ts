@@ -43,15 +43,15 @@ export interface PacingInput {
   banRisk?: boolean;
   /**
    * Esta decisão é para a RESPOSTA do agente (o cliente escreveu e espera
-   * resposta) ou para o DISPARO (envio em massa / cutucar)?
+   * resposta) ou para o DISPARO (envio em massa / retomada de conversa parada)?
    *
-   * ⚠️ `true` (resposta) lê `reengajar*`; `false`/omitido (disparo) lê
+   * ⚠️ `true` (resposta) lê `resposta*`; `false`/omitido (disparo) lê
    * `window*`. Default `false` porque TODO chamador existente é disparo ou
    * não-POSTO — o `pacingGate` precisa declarar a resposta explicitamente para
    * a separação valer, e é o que a torna visível numa revisão de código.
    *
    * Responder e disparar são riscos diferentes: 50 mensagens de madrugada
-   * baninam o número, uma resposta para quem escreveu às 3h é o serviço.
+   * levam o número ao banimento; uma resposta para quem escreveu às 3h é o serviço.
    */
   resposta?: boolean;
   /** [0,1) — injetável nos testes; default Math.random. */
@@ -72,9 +72,8 @@ export function decidePacing(input: PacingInput): PacingDecision {
   const banRisk = input.banRisk ?? true; // default preserva o comportamento atual
   const resposta = input.resposta ?? false; // default = disparo (janela restritiva)
   const wall = wallClock(now, knobs.timezone);
-  // Resposta lê `reengajar*`, disparo lê `window*`. Os knobs comemam sem
-  // `reengajar*` válido (clone sem a 0381 aplicado) caem no par de disparo —
-  // é o comportamento de sempre, não um terceiro valor inventado.
+  // Resposta lê `resposta*`, disparo lê `window*`. Coluna vazia já chega aqui
+  // preenchida com a de disparo (`loadChannelKnobs`, 0495).
   const janela = janelaDoPacing(knobs, resposta);
 
   if (!insideWindow(wall, knobs, janela)) {
@@ -216,9 +215,9 @@ export function dayStartInTz(instant: Date, timezone: string): Date {
  * saída (ver `inbound-turn.ts`). O gate de envio continua sendo o que decide de
  * verdade: isto é só o atalho barato, sem tocar em caps nem em throttle.
  *
- * `resposta` separa as janelas: o turno inbound é RESPOSTA (lê `reengajar*`) e
- * o disparo/cutucar é `false` (lê `window*`). Omitir = disparo, que é o
- * comportamento de todo chamador anterior a 0381.
+ * `resposta` separa as janelas: o turno inbound é RESPOSTA (lê `resposta*`) e
+ * o disparo/retomada é `false` (lê `window*`). Omitir = disparo, que é o
+ * comportamento de todo chamador anterior a 0495.
  */
 export function janelaDeEnvioAberta(
   now: Date,
@@ -247,21 +246,7 @@ function janelaDoPacing(
   resposta: boolean,
 ): { start: number; end: number } {
   if (!resposta) return { start: knobs.windowStartHour, end: knobs.windowEndHour };
-  // Par de resposta ausente ou incompleto (clone sem a 0381, ou coluna gravada só
-  // pela metade): cai na janela de disparo INTEIRA, nunca metade dela.
-  //
-  // ⚠️ Misturar as duas colunas (`reengajarStartHour` de uma, `windowEndHour` de
-  // outra) produziria uma janela que ninguém configurou: com só o início gravado
-  // como 0, sairia `0h-22h` — que é abrir a madrugada sem ninguém ter pedido,
-  // pelo caminho que parece mais conservador. Ou `7h-24h`, que abre a noite.
-  // Qualquer par pela metade é configuração inválida e vale o par completo de
-  // disparo, que é o comportamento de sempre.
-  const temInicio = knobs.reengajarStartHour !== undefined && knobs.reengajarStartHour !== null;
-  const temFim = knobs.reengajarEndHour !== undefined && knobs.reengajarEndHour !== null;
-  if (!temInicio || !temFim) {
-    return { start: knobs.windowStartHour, end: knobs.windowEndHour };
-  }
-  return { start: knobs.reengajarStartHour, end: knobs.reengajarEndHour };
+  return { start: knobs.respostaStartHour, end: knobs.respostaEndHour };
 }
 
 function insideWindow(

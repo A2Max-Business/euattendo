@@ -44545,29 +44545,51 @@ end
 $pub$;
 
 -- ---- janela de RESPOSTA separada da janela de DISPARO (migration 0495) ----
--- O dono pediu: o agente responde a qualquer hora, mas NADA de disparo em massa
--- nem cutucar conversa parada fora do horário comercial. As duas coisas eram
--- regidas por UM knob (`window_start_hour`/`window_end_hour`), então abrir a
--- janela do agente para 24h abriria também a do disparo.
+-- O agente passa a poder responder a quem escreveu fora do horário comercial sem
+-- abrir junto o disparo em massa, a prospecção e a retomada de conversa parada.
+-- As duas coisas eram regidas por UM par (`window_start_hour`/`window_end_hour`).
 --
 -- Colunas soltas, não jsonb: `window_*_hour` é coluna desde a 0010 e a tela de
--- Conexões já os edita; um `reengajar_knobs` jsonb nasceria sem CHECK forte e
+-- Conexões já os edita; um `resposta_knobs` jsonb nasceria sem CHECK forte e
 -- divergiria do vizinho na mesma tabela.
 --
--- ⚠️ NULL = conserva o comportamento de HOJE (o agente espera na janela do
--- disparo). Um clone que nunca gravou estas colunas não muda de comportamento por
--- causa desta migration — e é por isso que o default é NULL e não 0/24.
---
--- O padrão DOCUMENTADO de `reengajar_*` é 9h-21h, mais apertado que o disparo
--- (7h-22h) porque cutucar quem SUMIU é o que mais incomoda: essa mensagem chega
--- para alguém que não pediu nada. Quem preferir igualar ao disparo grava 7 e 22.
-alter table public.channel_knobs
-  add column if not exists reengajar_start_hour smallint,
-  add column if not exists reengajar_end_hour smallint;
+-- ⚠️ Sem DEFAULT: NULL = a resposta herda a janela de disparo, coluna a coluna,
+-- que é o comportamento de antes. Quem só atualiza não muda de operação.
 
-comment on column public.channel_knobs.reengajar_start_hour is
+-- A primeira versão desta migration (PR #1983, fechado sem merge) chamava as
+-- colunas `reengajar_*`. Quem já a aplicou tem os dados lá: renomeia em vez de
+-- criar coluna nova ao lado, e a constraint de nome velho sai junto.
+do $renomear_reengajar$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'channel_knobs'
+                and column_name = 'reengajar_start_hour')
+     and not exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'channel_knobs'
+                and column_name = 'resposta_start_hour') then
+    alter table public.channel_knobs rename column reengajar_start_hour to resposta_start_hour;
+  end if;
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'channel_knobs'
+                and column_name = 'reengajar_end_hour')
+     and not exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'channel_knobs'
+                and column_name = 'resposta_end_hour') then
+    alter table public.channel_knobs rename column reengajar_end_hour to resposta_end_hour;
+  end if;
+end
+$renomear_reengajar$;
+
+alter table public.channel_knobs
+  drop constraint if exists channel_knobs_reengajar_horas_validas;
+
+alter table public.channel_knobs
+  add column if not exists resposta_start_hour smallint,
+  add column if not exists resposta_end_hour smallint;
+
+comment on column public.channel_knobs.resposta_start_hour is
   'Início da janela de RESPOSTA do agente (h, hora local da org). NULL = usa window_start_hour (comportamento anterior).';
-comment on column public.channel_knobs.reengajar_end_hour is
+comment on column public.channel_knobs.resposta_end_hour is
   'Fim da janela de RESPOSTA do agente (h, exclusivo; 24 = meia-noite). NULL = usa window_end_hour.';
 
 -- 0..24. `end` pode ser 24 (meia-noite seguinte) porque `insideWindow` compara
@@ -44577,12 +44599,12 @@ comment on column public.channel_knobs.reengajar_end_hour is
 -- sem guarda quebra com 'already exists' no segundo clone que atualizar. É o
 -- gate `tests/unit/baseline-reaplicavel.test.ts` que cobra esta forma.
 alter table public.channel_knobs
-  drop constraint if exists channel_knobs_reengajar_horas_validas;
+  drop constraint if exists channel_knobs_resposta_horas_validas;
 alter table public.channel_knobs
-  add constraint channel_knobs_reengajar_horas_validas
+  add constraint channel_knobs_resposta_horas_validas
   check (
-    (reengajar_start_hour is null or reengajar_start_hour between 0 and 23)
-    and (reengajar_end_hour is null or reengajar_end_hour between 1 and 24)
+    (resposta_start_hour is null or resposta_start_hour between 0 and 23)
+    and (resposta_end_hour is null or resposta_end_hour between 1 and 24)
   );
 
 -- ---- dedupe de event_dead atômico: índice único parcial (migration 0491) ----

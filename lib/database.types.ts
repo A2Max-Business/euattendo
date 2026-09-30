@@ -3954,6 +3954,10 @@ export type Database = {
           warmup_daily_caps: Json | null
           window_end_hour: number | null
           window_start_hour: number | null
+          atraso_notar_ms: number | null
+          ms_por_caractere: number | null
+          atraso_minimo_ms: number | null
+          atraso_maximo_ms: number | null
         }
         Insert: {
           allow_sunday?: boolean | null
@@ -3970,6 +3974,10 @@ export type Database = {
           warmup_daily_caps?: Json | null
           window_end_hour?: number | null
           window_start_hour?: number | null
+          atraso_notar_ms?: number | null
+          ms_por_caractere?: number | null
+          atraso_minimo_ms?: number | null
+          atraso_maximo_ms?: number | null
         }
         Update: {
           allow_sunday?: boolean | null
@@ -3986,6 +3994,10 @@ export type Database = {
           warmup_daily_caps?: Json | null
           window_end_hour?: number | null
           window_start_hour?: number | null
+          atraso_notar_ms?: number | null
+          ms_por_caractere?: number | null
+          atraso_minimo_ms?: number | null
+          atraso_maximo_ms?: number | null
         }
         Relationships: [
           {

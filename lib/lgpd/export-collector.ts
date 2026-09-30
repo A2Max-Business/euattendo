@@ -1607,44 +1607,42 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   const ai_agent_runs: NonNullable<ExportPayload["ai_agent_runs"]> = [];
   const lead_state: NonNullable<ExportPayload["lead_state"]> = [];
   if (contactId) {
-    const páginaPorContato = async <T extends { id: string }>(
-      tabela: "lead_notes" | "ai_agent_runs" | "lead_state",
-      colunas: string,
-      refino?: (linha: Record<string, unknown>) => T,
-    ): Promise<T[]> => {
-      const linhas: T[] = [];
+    const lePaginado = async (query: {
+      tabela: "lead_notes" | "ai_agent_runs" | "lead_state";
+      colunas: string;
+    }): Promise<Record<string, unknown>[]> => {
+      const linhas: Record<string, unknown>[] = [];
       for (let offset = 0; ; offset += 500) {
         const { data, error } = await admin
-          .from(tabela)
-          .select(colunas)
+          .from(query.tabela)
+          .select(query.colunas)
           .eq("organization_id", organizationId)
           .eq("contact_id", contactId)
           .order("id")
           .range(offset, offset + 499);
         if (error) throw error;
-        const mapa = (data ?? []) as Record<string, unknown>[];
-        linhas.push(...(refino ? mapa.map(refino) : (mapa as unknown as T[])));
+        linhas.push(...((data ?? []) as unknown as Record<string, unknown>[]));
         if (!data || data.length < 500) break;
       }
       return linhas;
     };
-    for (const nota of await páginaPorContato<ExportPayload["lead_notes"][number]>(
-      "lead_notes",
-      "id, headline, body, created_at, updated_at",
-    )) {
-      lead_notes.push(nota);
+    for (const nota of await lePaginado({
+      tabela: "lead_notes",
+      colunas: "id, headline, body, created_at, updated_at",
+    })) {
+      lead_notes.push(nota as NonNullable<ExportPayload["lead_notes"]>[number]);
     }
-    for (const run of await páginaPorContato<ExportPayload["ai_agent_runs"][number]>(
-      "ai_agent_runs",
-      "id, tool_calls, created_at",
-    )) {
-      ai_agent_runs.push(run);
+    for (const run of await lePaginado({
+      tabela: "ai_agent_runs",
+      colunas: "id, tool_calls, created_at",
+    })) {
+      ai_agent_runs.push(run as NonNullable<ExportPayload["ai_agent_runs"]>[number]);
     }
-    for (const estado of await páginaPorContato<ExportPayload["lead_state"][number]>(
-      "lead_state",
-      "id, next_action, qualification, updated_at",
-    )) {
-      lead_state.push(estado);
+    for (const estado of await lePaginado({
+      tabela: "lead_state",
+      colunas: "id, next_action, qualification, updated_at",
+    })) {
+      lead_state.push(estado as NonNullable<ExportPayload["lead_state"]>[number]);
     }
   }
   // Casos, linha do tempo do caso e demandas — o que a 0280 pôs na cascata.

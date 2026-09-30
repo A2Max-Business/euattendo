@@ -216,6 +216,32 @@ describe("paraEventoDoGoogle", () => {
       paraEventoDoGoogle(agendamento({ participantes: [{ email: "  " }] })),
     ).toThrow(/participante sem e-mail/);
   });
+
+  it("⚠️ nunca vaza a anotação INTERNA (notes) para o Google", () => {
+    // ─── A CERCA (#1959) ──────────────────────────────────────────────────
+    // A entrada `AgendamentoParaGoogle` NÃO tem o campo `notes` — por construção
+    // de tipo já é impossível vazar por aqui. A cerca é para o futuro: um
+    // refactor que acrescente `notes` ao snapshot (o `sync-store.ts` já passou
+    // por isso) e o espalhe via `...a` reabriria o vazamento sem o TypeScript
+    // culpar ninguém. Este caso tranca QUE O EVENTO NÃO LEVA O TEXTO INTERNO,
+    // em nenhum campo — nem `description`, nem um campo que um futuro `...a`
+    // criasse no corpo.
+    const comNotaInterna = {
+      ...agendamento(),
+      notes: "queixa clínica: paciente com ansiedade e dor torácica recorrente",
+    } as unknown as AgendamentoParaGoogle;
+    const corpo = paraEventoDoGoogle(comNotaInterna);
+    const serializa = JSON.stringify(corpo);
+    expect(corpo.description).toBe("Primeira consulta"); // a visível é a do agendamento
+    expect(corpo.description).not.toContain("queixa clínica");
+    // Nenhum campo do corpo pode carregar o texto interno — pega até um
+    // espalhamento futuro (`...a`) que criasse uma chave nova.
+    expect(serializa).not.toContain("queixa clínica");
+    expect(serializa).not.toContain("dor torácica");
+    // Campo `notes` não existe no corpo tipado — se um dia existir, o teste
+    // para de compilar (e é exatamente o que queremos).
+    expect("notes" in corpo).toBe(false);
+  });
 });
 
 // ─── VOLTA ─────────────────────────────────────────────────────────────────

@@ -3433,7 +3433,7 @@ export const DICIONARIO: Traducoes = {
   "Seu sistema usa inteligência artificial em": { es: "Tu sistema usa inteligencia artificial en" },
   "Skills da IA": { es: "Skills de la IA" },
   "Skills instaladas": { es: "Skills instaladas" },
-  "O que mudou na versão do catálogo:": { es: "Lo que cambió en la versión del catálogo:" },
+  "Se você adotar a versão do catálogo, muda:": { es: "Si adoptas la versión del catálogo, cambia:" },
   "Palavras-chave de ativação": { es: "Palabras clave de activación" },
   "Procedimento (corpo)": { es: "Procedimiento (cuerpo)" },
   "Há uma versão nova desta skill no catálogo. Se você editou esta cópia, suas alterações ficam só no Histórico de versões: ao adotar, a versão nova do catálogo passa a ser a ativa. Confira antes de adotar.": {

@@ -76,6 +76,16 @@ describe("compararSkill — o que mudou entre a cópia da org e a versão nova d
     expect(r.linhas_removidas).toBe(1);
     expect(r.corpo_mudou).toBe(true);
   });
+
+  it("matcher `{}` (default da coluna) não lança: só o lado que tem palavras-chave conta", () => {
+    const r = compararSkill(
+      { description: "D", body: "X", matcher: {} },
+      { description: "D", body: "X", matcher: { any_keywords: ["frete"] } },
+    );
+    expect(r.any_adicionadas).toEqual(["frete"]);
+    expect(r.any_removidas).toEqual([]);
+    expect(r.mudou_em).toEqual(["matcher"]);
+  });
 });
 
 describe("diffLinhas — LCS por linha do procedimento", () => {

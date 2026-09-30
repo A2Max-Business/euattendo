@@ -12,7 +12,9 @@
  * jsonb de palavras-chave.
  */
 export interface ComparativoMatcher {
-  any_keywords: string[];
+  // Opcional de propósito: a coluna `skill_versions.matcher` tem default `'{}'`,
+  // e um matcher sem `any_keywords` não pode derrubar o GET /skills e o SSR.
+  any_keywords?: string[];
   probe_keywords?: string[];
 }
 
@@ -25,9 +27,13 @@ export interface ComparativoEntrada {
 export interface ComparativoSkill {
   descricao_mudou: boolean;
   matcher_mudou: boolean;
-  /** Palavras-chave de ativação presentes só no catálogo (a cópia não tem). */
+  /** Palavras-chave que ENTRAM ao adotar: estão no catálogo e não na cópia. */
   any_adicionadas: string[];
-  /** Palavras-chave de ativação que a cópia tem e o catálogo removeu. */
+  /**
+   * Palavras-chave que SAEM ao adotar: estão na cópia e não no catálogo. Podem
+   * ser edição da própria organização, não remoção do catálogo — o diff é de
+   * duas vias (cópia × catálogo), sem a versão de origem.
+   */
   any_removidas: string[];
   corpo_mudou: boolean;
   linhas_adicionadas: number;
@@ -102,7 +108,7 @@ function montarResumo(mudouEm: ComparativoSkill["mudou_em"]): string {
 export function compararSkill(org: ComparativoEntrada, catalogo: ComparativoEntrada): ComparativoSkill {
   const descricao_mudou = org.description !== catalogo.description;
 
-  const anyDiff = diffList(org.matcher.any_keywords, catalogo.matcher.any_keywords);
+  const anyDiff = diffList(org.matcher.any_keywords ?? [], catalogo.matcher.any_keywords ?? []);
   const matcher_mudou =
     anyDiff.adicionadas.length > 0 || anyDiff.removidas.length > 0;
 

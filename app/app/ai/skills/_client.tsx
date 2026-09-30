@@ -176,7 +176,7 @@ export function SkillsClient({ initialState }: Props) {
                         {skill.comparativo && skill.comparativo.mudou_em.length > 0 && (
                           <span className="flex flex-col gap-1 pl-6">
                             <span className="font-medium text-text">
-                              {t("O que mudou na versão do catálogo:")}
+                              {t("Se você adotar a versão do catálogo, muda:")}
                             </span>
                             <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-text-muted">
                               {skill.comparativo.mudou_em.includes("descricao") && (

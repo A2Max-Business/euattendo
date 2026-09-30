@@ -703,9 +703,11 @@ export interface ExportPayload {
     updated_at: string | null;
   }>;
   /**
-   * Registro de execução da IA (#1957): `ai_agent_runs.tool_calls` (jsonb)
-   * guarda os argumentos passados às ferramentas — nome do titular e trechos
-   * do que escreveu. Redigido na cascata; entregue no acesso. Org + contato.
+   * Registro de execução da IA (#1957): de `ai_agent_runs.tool_calls` (jsonb)
+   * saem só o nome e os argumentos de cada ferramenta — nome do titular e
+   * trechos do que escreveu. O `result` e o texto do passo ficam de fora
+   * (podem trazer dado de OUTROS contatos; ver `toolCallsParaOTitular`).
+   * Redigido na cascata; entregue no acesso. Org + contato.
    */
   ai_agent_runs?: Array<{
     id: string;
@@ -847,6 +849,41 @@ async function lerControlador(
     dpo_email: data.dpo_email?.trim() || dpoDaInstalacao,
     country: (data as { country?: string | null }).country ?? null,
   };
+}
+
+/**
+ * O que o titular recebe de `ai_agent_runs.tool_calls` (#1965): por passo, o
+ * nome e os argumentos de cada ferramenta — o que o agente fez com o que a
+ * pessoa escreveu. Saem o `result` de cada chamada e o `text` do passo (forma
+ * em `lib/ai/runtime/serialize.ts`): o `result` de `crm_search_contacts` traz
+ * nome, telefone e e-mail de até 50 OUTROS contatos, e o de
+ * `crm_list_appointments` a agenda da organização — entregá-los seria dar ao
+ * titular A o dado do titular B. O texto do modelo pode repetir esse resultado.
+ * Passo já redigido pela cascata (`redacted: true`, sem `args`) sai como está.
+ */
+export function toolCallsParaOTitular(toolCalls: unknown): unknown[] {
+  const passos = Array.isArray(toolCalls) ? (toolCalls as unknown[]) : [];
+  return passos.map((p) => {
+    const passo = (p ?? {}) as {
+      step?: unknown;
+      tool_name?: unknown;
+      redacted?: unknown;
+      tool_calls?: unknown;
+    };
+    const chamadas = Array.isArray(passo.tool_calls) ? (passo.tool_calls as unknown[]) : [];
+    return {
+      ...(passo.step !== undefined ? { step: passo.step } : {}),
+      ...(typeof passo.tool_name === "string" ? { tool_name: passo.tool_name } : {}),
+      ...(passo.redacted === true ? { redacted: true } : {}),
+      tool_calls: chamadas.map((c) => {
+        const chamada = (c ?? {}) as { tool_name?: unknown; args?: unknown };
+        return {
+          tool_name: typeof chamada.tool_name === "string" ? chamada.tool_name : "unknown",
+          ...(chamada.args !== undefined ? { args: chamada.args } : {}),
+        };
+      }),
+    };
+  });
 }
 
 export async function collectExportData(args: CollectArgs): Promise<ExportPayload> {
@@ -1601,8 +1638,9 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
   //
   // as três têm `contact_id` + `organization_id` na própria linha, então o
   // escopo sai do mesmo `eq` que a cascata usa — sem depender de derivação
-  // por conversa ou lead. `ai_agent_runs.tool_calls` e `lead_state.qualification`
-  // são jsonb e saem íntegros: o que o titular escreveu não vira resumo.
+  // por conversa ou lead. `lead_state.qualification` sai íntegro; de
+  // `ai_agent_runs.tool_calls` saem os argumentos, não o resultado das
+  // ferramentas, que pode trazer dado de outras pessoas (`toolCallsParaOTitular`).
   const lead_notes: NonNullable<ExportPayload["lead_notes"]> = [];
   const ai_agent_runs: NonNullable<ExportPayload["ai_agent_runs"]> = [];
   const lead_state: NonNullable<ExportPayload["lead_state"]> = [];
@@ -1636,7 +1674,10 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       tabela: "ai_agent_runs",
       colunas: "id, tool_calls, created_at",
     })) {
-      ai_agent_runs.push(run as NonNullable<ExportPayload["ai_agent_runs"]>[number]);
+      ai_agent_runs.push({
+        ...(run as NonNullable<ExportPayload["ai_agent_runs"]>[number]),
+        tool_calls: toolCallsParaOTitular(run.tool_calls),
+      });
     }
     for (const estado of await lePaginado({
       tabela: "lead_state",

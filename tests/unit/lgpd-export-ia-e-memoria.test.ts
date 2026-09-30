@@ -131,6 +131,10 @@ const TEXTOS_DO_TITULAR = [
   "lembre de ligar segunda as 10h",
 ];
 const TEXTO_ALHEIO = "conteudo de outro contato";
+// O `result` de `crm_search_contacts` traz OUTROS contatos (lib/mcp/tools/contacts.ts).
+const TELEFONE_DE_TERCEIRO = "+5511988887777";
+const EMAIL_DE_TERCEIRO = "outra@exemplo.com";
+const TEXTO_DO_MODELO = "achei a Maria Terceira no cadastro";
 const TEXTO_OUTRO_TENANT = "conteudo de outro tenant";
 
 beforeEach(() => {
@@ -154,20 +158,39 @@ beforeEach(() => {
       nota("nota-other-tenant", OTHER_ORG, CONTACT, TEXTO_OUTRO_TENANT, TEXTO_OUTRO_TENANT),
     ],
     ai_agent_runs: [
+      // Forma real do serializer (lib/ai/runtime/serialize.ts): por passo
+      // `{ step, text, finish_reason, tool_calls: [{ tool_name, args, result }] }`.
       run("run-mine", ORG, CONTACT, [
         {
-          step: "analisar",
-          tool_name: "register_lead_note",
+          step: 0,
+          text: TEXTO_DO_MODELO,
+          finish_reason: "tool-calls",
+          tokens_in: 900,
+          tokens_out: 40,
           tool_calls: [
             {
               tool_name: "add_note",
-              arguments: { text: TEXTOS_DO_TITULAR[0], nome: "Joana Teste" },
+              args: { text: TEXTOS_DO_TITULAR[0], nome: "Joana Teste" },
+              result: { ok: true },
+            },
+            {
+              tool_name: "crm_search_contacts",
+              args: { query: "Joana Teste" },
+              result: {
+                contacts: [
+                  { id: OTHER_CONTACT, name: "Maria Terceira", phone: TELEFONE_DE_TERCEIRO, email: EMAIL_DE_TERCEIRO },
+                ],
+              },
             },
           ],
         },
       ]),
-      run("run-other-contact", ORG, OTHER_CONTACT, [{ tool_name: "internal", arguments: { text: TEXTO_ALHEIO } }]),
-      run("run-other-tenant", OTHER_ORG, CONTACT, [{ tool_name: "internal", arguments: { text: TEXTO_OUTRO_TENANT } }]),
+      run("run-other-contact", ORG, OTHER_CONTACT, [
+        { step: 0, tool_calls: [{ tool_name: "internal", args: { text: TEXTO_ALHEIO } }] },
+      ]),
+      run("run-other-tenant", OTHER_ORG, CONTACT, [
+        { step: 0, tool_calls: [{ tool_name: "internal", args: { text: TEXTO_OUTRO_TENANT } }] },
+      ]),
     ],
     lead_state: [
       estado("estado-mine", ORG, CONTACT, "ligar segunda", { nivel: "quente", interesse: "premium" }),
@@ -203,6 +226,32 @@ describe("LGPD: export do titular traz a memória da IA e o estado da lead", () 
       new RegExp(`${TEXTO_ALHEIO}|${TEXTO_OUTRO_TENANT}|internal`),
     );
     expect(reads.filter((read) => read.table === "ai_agent_runs")).toHaveLength(1);
+  });
+
+  it("ai_agent_runs NÃO entrega o resultado das ferramentas nem o texto do modelo (dado de terceiros)", async () => {
+    const payload = await collectExportData(request);
+    expect(payload.ai_agent_runs![0]!.tool_calls).toEqual([
+      {
+        step: 0,
+        tool_calls: [
+          { tool_name: "add_note", args: { text: TEXTOS_DO_TITULAR[0], nome: "Joana Teste" } },
+          { tool_name: "crm_search_contacts", args: { query: "Joana Teste" } },
+        ],
+      },
+    ]);
+    const json = JSON.stringify(payload);
+    expect(json).not.toContain(TELEFONE_DE_TERCEIRO);
+    expect(json).not.toContain(EMAIL_DE_TERCEIRO);
+    expect(json).not.toContain(TEXTO_DO_MODELO);
+  });
+
+  it("run já redigida pela cascata sai como está: só o nome das ferramentas", async () => {
+    const redigido = [{ step: 0, redacted: true, tool_calls: [{ tool_name: "crm_search_contacts" }] }];
+    rows.ai_agent_runs = [run("run-redigida", ORG, CONTACT, redigido)];
+    const payload = await collectExportData(request);
+    expect(payload.ai_agent_runs).toEqual([
+      expect.objectContaining({ id: "run-redigida", tool_calls: redigido }),
+    ]);
   });
 
   it("lead_state entrega next_action e qualification do titular, filtrado por org e contato", async () => {

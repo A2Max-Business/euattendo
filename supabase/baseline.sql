@@ -43149,7 +43149,8 @@ as $t$
                'tool_calls', coalesce((
                  select jsonb_agg(jsonb_build_object('tool_name', coalesce(c ->> 'tool_name', 'unknown')))
                    from jsonb_array_elements(s.step -> 'tool_calls') c
-               ), '[]'::jsonb) ) as step_json,
+               ), '[]'::jsonb)
+             )) as step_json,
              s.ord
         from jsonb_array_elements(coalesce(p_tool_calls, '[]'::jsonb)) with ordinality s(step, ord)
     ) t;

@@ -43058,8 +43058,7 @@ begin
          or embedding is not null);
 
   update public.ai_agent_runs r set
-    tool_calls = public.fn_lgpd_redigir_tool_calls(r.tool_calls),
-    updated_at = now()
+    tool_calls = public.fn_lgpd_redigir_tool_calls(r.tool_calls)
   where r.organization_id = new.organization_id
     and r.contact_id = new.id
     and exists (

@@ -112,8 +112,7 @@ begin
   -- argumentos e os resultados. Guard no WHERE: só corre quando há passo sem
   -- `redacted`, então o `[]` de nascença e a run já redigida não são tocados.
   update public.ai_agent_runs r set
-    tool_calls = public.fn_lgpd_redigir_tool_calls(r.tool_calls),
-    updated_at = now()
+    tool_calls = public.fn_lgpd_redigir_tool_calls(r.tool_calls)
   where r.organization_id = new.organization_id
     and r.contact_id = new.id
     and exists (

@@ -39,6 +39,8 @@ const OUTRA_ORG = "1964a000-2222-4000-8000-00000000000a";
 const OUTRA_ORG_CONTATO = "1964a000-1111-4000-8000-000000000003";
 
 const AGENTE = "1964a000-3333-4000-8000-000000000001";
+const AGENTE_VERSAO = "1964a000-4444-4000-8000-000000000001";
+const SESS = "1964a000-5555-4000-8000-000000000001";
 
 /** SDK de acesso SQL no container de teste (mesma forma do 0391). */
 beforeAll(() => {
@@ -53,6 +55,22 @@ beforeAll(() => {
       ('${ALVO}',   '${ORG}',        'Bruno Silva Alvo',  'Bruno Silva Alvo',  'wa:5511999990000'),
       ('${VIZINHO}', '${ORG}',        'Carlos Vizinho',    'Carlos Vizinho',    'wa:5511888880000'),
       ('${OUTRA_ORG_CONTATO}', '${OUTRA_ORG}', 'Diana Outra', 'Diana Outra', 'wa:557777000')
+    on conflict (id) do nothing;
+
+    -- Sessão de canal, agente e versão que as runs do experimento referenciam
+    -- (FKs obrigatórias de ai_agent_runs / ai_agent_versions).
+    insert into public.channel_sessions (id, organization_id, waha_session_name, webhook_secret_encrypted)
+    values ('${SESS}', '${ORG}', 'lgpd-1964-sess', '\\x00'::bytea)
+    on conflict (id) do nothing;
+
+    insert into public.ai_agents (id, organization_id, name, model, system_prompt)
+    values ('${AGENTE}', '${ORG}', 'Agente LGPD 1964', 'anthropic/claude-sonnet-4-6', 'agente de teste')
+    on conflict (id) do nothing;
+
+    insert into public.ai_agent_versions
+      (id, organization_id, agent_id, version_number, system_prompt, provider, model, channel_session_id, status)
+    values ('${AGENTE_VERSAO}', '${ORG}', '${AGENTE}', 1, 'agente de teste', 'anthropic',
+            'anthropic/claude-sonnet-4-6', '${SESS}', 'published')
     on conflict (id) do nothing;
 
     -- O vizinho do contato e o de outra org guardam o MESMO texto crú: só as
@@ -70,7 +88,7 @@ beforeAll(() => {
 
     insert into public.ai_agent_runs
       (id, organization_id, agent_id, agent_version_id, contact_id, status, tool_calls)
-    select gen_random_uuid(), c.organization_id, '${AGENTE}', '${AGENTE}', c.id, 'completed',
+    select gen_random_uuid(), c.organization_id, '${AGENTE}', '${AGENTE_VERSAO}', c.id, 'completed',
            jsonb_build_array(jsonb_build_object(
              'step', 1,
              'text', 'buscando lead de Bruno',

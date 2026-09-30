@@ -53,6 +53,7 @@ export const DICIONARIO: Traducoes = {
   "Enriquecendo…": {"es": "Completando…"},
   "Enriquecer CNPJ": {"es": "Completar por CNPJ"},
   "Enriquecimento": {"es": "Datos de BrasilAPI"},
+  "Esperar antes de responder (segundos)": {"es": "Esperar antes de responder (segundos)"},
   "Falha na importação.": {"es": "Falló la importación."},
   "Importações": {"es": "Importaciones"},
   "Linhas": {"es": "Filas"},
@@ -1722,6 +1723,10 @@ export const DICIONARIO: Traducoes = {
   "Volume de texto por atendimento": { es: "Volumen de texto por atención" },
   "Custo máximo por atendimento (centavos)": { es: "Costo máximo por atención (centavos)" },
   "Mensagens anteriores que ele lê": { es: "Mensajes anteriores que lee" },
+  "Mensagens do mesmo contato dentro desse tempo viram uma resposta só. Vazio usa a janela padrão da instalação (máximo 60 segundos).": {
+    es: "Los mensajes del mismo contacto dentro de este tiempo se convierten en una sola respuesta. Vacío usa la ventana predeterminada de la instalación (máximo 60 segundos).",
+  },
+  "Vazio = padrão da instalação": { es: "Vacío = predeterminado de la instalación" },
   "Tamanho máximo desse histórico": { es: "Tamaño máximo de ese historial" },
   "As instruções dele": { es: "Sus instrucciones" },
   "Estilo de resposta": { es: "Estilo de respuesta" },

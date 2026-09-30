@@ -15,10 +15,11 @@
 import { z } from 'zod';
 import type pg from 'pg';
 
+import { loadConversationAgentConfig } from '../../agent/agent-config';
 import { insertInboxItem } from '../../db/repository';
 import type { Logger } from '../../obs/logger';
 import { enqueueJob } from '../../queue/queue';
-import { decidirRajada } from './debounce';
+import { decidirRajada, debounceEfetivo } from './debounce';
 import { avisoDeEventoMorto, IA_QUE_NAO_RESPONDEU } from '@/lib/event-log/aviso-de-evento-morto';
 import { TIPOS_DERIVAVEIS, DERIVACAO_TERMINADA } from '@/lib/messaging/media/derivable';
 import { decidirElegibilidadeDaConversa } from '@/lib/ai/elegibilidade/consulta-pg';
@@ -196,6 +197,31 @@ const ESPERA_DERIVACAO_MS = 4_000;
 const TETO_ESPERA_DERIVACAO_MS = 120_000;
 
 type DesfechoEvento = 'processado' | 'adiar';
+
+/**
+ * Janela de rajada EFETIVA para o evento: a configurada na versão do agente
+ * desta conversa (#1856), com o `INBOUND_DEBOUNCE_MS` da instalação como
+ * default e clamp no teto de 60s (`debounceEfetivo`).
+ *
+ * Usa a MESMA resolução que o turno (`loadConversationAgentConfig`): respeta o
+ * `active_ai_agent_id` da conversa quando há dono explícito e cai no agente
+ * publicado da sessão quando não. Com o campo vazio (default de toda
+ * instalação) a consulta volta `null` e o valor vira o da env — regressão zero.
+ */
+async function debounceDoEvento(
+  pool: pg.Pool,
+  event: EventRow,
+  p: { conversation_id: string; channel_session_id: string },
+  padraoInstalacao: number,
+): Promise<number> {
+  const agentConfig = await loadConversationAgentConfig(
+    pool,
+    event.organization_id,
+    p.conversation_id,
+    p.channel_session_id,
+  );
+  return debounceEfetivo(agentConfig?.inboundDebounceMs ?? null, padraoInstalacao);
+}
 
 async function processEvent(
   pool: pg.Pool,
@@ -485,7 +511,7 @@ async function processEvent(
   const rajada = await decidirRajada(
     pool,
     { organizationId: event.organization_id, contactId: p.contact_id },
-    knobs.debounceMs,
+    await debounceDoEvento(pool, event, p, knobs.debounceMs),
   );
   if (rajada.tipo === 'coalescido') {
     log.info('drain: rajada coalescida em job pendente', {

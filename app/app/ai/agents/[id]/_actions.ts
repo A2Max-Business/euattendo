@@ -320,6 +320,7 @@ export async function saveAgentDraftAction(
         knowledge_source_ids: v.knowledge_source_ids,
         split_messages: v.split_messages,
         split_max_chars: v.split_max_chars,
+        inbound_debounce_ms: v.inbound_debounce_ms ?? null,
         followup: v.followup,
         status: "draft",
         created_by: authUser.id,
@@ -537,6 +538,7 @@ export async function revertToVersionAction(
     knowledge_source_ids: string[];
     split_messages: boolean;
     split_max_chars: number;
+    inbound_debounce_ms: number | null;
   };
   const src = source as unknown as SourceRow;
 
@@ -586,6 +588,7 @@ export async function revertToVersionAction(
         knowledge_source_ids: src.knowledge_source_ids ?? [],
         split_messages: src.split_messages,
         split_max_chars: src.split_max_chars,
+        inbound_debounce_ms: src.inbound_debounce_ms ?? null,
         status: "draft",
         created_by: authUser.id,
       })
@@ -739,6 +742,7 @@ export async function createMcpAgentAction(
     cases_enabled: v.cases_enabled,
     split_messages: v.split_messages,
     split_max_chars: v.split_max_chars,
+    inbound_debounce_ms: v.inbound_debounce_ms ?? null,
     // O corpo ACEITAVA estes cinco e o INSERT os descartava: criar o assistente
     // pela tela com papel Operador, escopo de funil ou material marcado produzia
     // uma versão com tudo no default do banco — desligado e vazio.

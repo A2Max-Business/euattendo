@@ -1050,6 +1050,21 @@ export function AgentForm(props: Props) {
                 />
               </div>
               <div className="col-span-2 space-y-1">
+                <Label htmlFor="history_token_window">{t("Tamanho máximo desse histórico")}</Label>
+                <Input
+                  id="history_token_window"
+                  type="number"
+                  min={0}
+                  max={50000}
+                  step={500}
+                  value={form.history_token_window}
+                  onChange={(e) =>
+                    patch({ history_token_window: Number(e.target.value) })
+                  }
+                  disabled={disabled}
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
                 <Label htmlFor="inbound_debounce_ms">
                   {t("Esperar antes de responder (segundos)")}
                 </Label>
@@ -1074,7 +1089,7 @@ export function AgentForm(props: Props) {
                       inbound_debounce_ms:
                         raw === ""
                           ? null
-                          : Math.max(0, Math.min(60, Number(raw))) * 1000,
+                          : Math.round(Math.max(0, Math.min(60, Number(raw))) * 1000),
                     });
                   }}
                   disabled={disabled}
@@ -1084,21 +1099,6 @@ export function AgentForm(props: Props) {
                     "Mensagens do mesmo contato dentro desse tempo viram uma resposta só. Vazio usa a janela padrão da instalação (máximo 60 segundos).",
                   )}
                 </p>
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label htmlFor="history_token_window">{t("Tamanho máximo desse histórico")}</Label>
-                <Input
-                  id="history_token_window"
-                  type="number"
-                  min={0}
-                  max={50000}
-                  step={500}
-                  value={form.history_token_window}
-                  onChange={(e) =>
-                    patch({ history_token_window: Number(e.target.value) })
-                  }
-                  disabled={disabled}
-                />
               </div>
             </div>
           </Card>

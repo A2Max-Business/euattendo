@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Paths that bypass auth check in middleware.
  * Match precedence: array order. First match wins.
  */
@@ -152,6 +152,9 @@ export const PUBLIC_PATHS: RegExp[] = [
   // dois nomes de propósito: `/^\/legal/` deixaria qualquer sub-path futuro
   // nascer público de carona.
   /^\/legal\/(terms|privacy)$/,
+  // Demonstração Web de Atendimento por IA (isolada por token no servidor)
+  /^\/demo\/[0-9a-zA-Z_-]+$/,
+  /^\/api\/v1\/demo\/[0-9a-zA-Z_-]+\/(chat|info)$/,
 ];
 
 export function isPublicPath(pathname: string): boolean {

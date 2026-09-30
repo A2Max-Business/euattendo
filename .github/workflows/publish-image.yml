@@ -184,6 +184,12 @@ jobs:
       # também quebrou. Com ele ligado, o primeiro erro esconde os demais e
       # o conserto vira uma rodada por imagem.
       fail-fast: false
+      # `name` e `arch` são os DOIS eixos, e o `include` só completa receita e
+      # título casando pelo `name`. Não ponha as imagens só no `include` com
+      # `arch` de eixo único: um `include` que não toca chave ORIGINAL é somado
+      # a todas as combinações, e o seguinte SOBRESCREVE o valor que o anterior
+      # somou — sairiam 2 jobs, os dois da última imagem. Vigiado por
+      # tests/unit/toda-imagem-publicada-constroi-em-pr.test.ts.
       matrix:
         include:
           - name: deskcommcrm
@@ -198,6 +204,7 @@ jobs:
           - name: deskcomm-voice-agent
             dockerfile: Dockerfile.voice-agent
             title: DeskcommCRM voice agent
+        name: [deskcommcrm, deskcomm-worker, deskcomm-scheduler, deskcomm-voice-agent]
         arch: [amd64, arm64]
 
     steps:

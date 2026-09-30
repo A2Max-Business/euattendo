@@ -132,12 +132,14 @@ describe("o canal `stable` move em bloco", () => {
     // o outro, e é a remoção que reabre o buraco.
     expect(needs?.split(",").map((s) => s.trim()).sort()).toEqual([
       "build-and-push",
-      "juntar-manifestos",
       "imagem-do-app-sobe",
       // As imagens de fundo entram na #604: `deskcomm-worker` e
       // `deskcomm-scheduler` construíam e publicavam sem que nenhum job as
       // executasse — e o canal `stable` andava sobre um laço morto.
       "imagens-de-fundo-sobem",
+      // #1938: `stable` copia o índice multi-arquitetura, que só existe depois
+      // que as duas pernas de cada imagem foram unidas.
+      "juntar-manifestos",
     ]);
   });
 

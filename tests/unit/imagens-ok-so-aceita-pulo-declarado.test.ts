@@ -92,8 +92,8 @@ describe("imagens-ok só aceita o pulo declarado", () => {
         // Fora de PR, a régua de antes: tudo `success`, qualquer que seja o
         // output (fora de PR ele é sempre `sim`; `nao` aqui é impossível, e
         // mesmo assim não abre porta).
-        "push sim success success success success success success",
-        "push nao success success success success success success",
+        "push sim success success success success success",
+        "push nao success success success success success",
       ].sort(),
     );
   });

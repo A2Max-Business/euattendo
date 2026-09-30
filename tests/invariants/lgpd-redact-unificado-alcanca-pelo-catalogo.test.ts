@@ -250,17 +250,17 @@ const DECISOES: Record<string, Decisao> = {
   ai_agent_runs: {
     decidida: "redigir",
     caminho: "gatilho",
-    razao: "0493 (#1964): a LINHA fica (status, erro, tokens, ids das mensagens: é a trilha do que o agente fez), mas tool_calls — texto do modelo, argumentos e resultados das ferramentas, com nome e trechos do que a pessoa escreveu — é redigido na virada de is_anonymized pelo gatilho fn_redigir_conversas_ao_anonimizar (fn_lgpd_redigir_tool_calls preserva o nome das ferramentas e apaga o resto, `redacted = true` em todo passo), a MESMA porta que o desenho da 0391 e que a app já usava em lib/lgpd/cascata.ts passo 6.",
+    razao: "0494 (#1964): a LINHA fica (status, erro, tokens, ids das mensagens: é a trilha do que o agente fez), mas tool_calls — texto do modelo, argumentos e resultados das ferramentas, com nome e trechos do que a pessoa escreveu — é redigido na virada de is_anonymized pelo gatilho fn_redigir_conversas_ao_anonimizar (fn_lgpd_redigir_tool_calls preserva o nome das ferramentas e apaga o resto, `redacted = true` em todo passo), a MESMA porta que o desenho da 0391 e que a app já usava em lib/lgpd/cascata.ts passo 6.",
   },
   lead_notes: {
     decidida: "redigir",
     caminho: "gatilho",
-    razao: "DÍVIDA PARCIAL QUITADA na 0493 (#1964): headline/body são texto livre do agente SOBRE a pessoa (e embedding é derivado dele). A virada de is_anonymized redige os dois (→ `(anonimizado)`, `embedding` → null) pelo gatilho fn_redigir_conversas_ao_anonimizar — a mesma porta da 0391 e a mesma régua que a app usava em lib/lgpd/cascata.ts passo 5. O irmão (lgpd-cascata-alcanca-quem-guarda-pessoa) mantém a entrada na dívida porque o instrumento dele só lê fn_lgpd_cascade_redact_contact + trg_reply_redact, não este gatilho — a dívida lá sai no dia em que aquele instrumento derivar também os gatilhos de contacts, no desenho da 0391.",
+    razao: "DÍVIDA PARCIAL QUITADA na 0494 (#1964): headline/body são texto livre do agente SOBRE a pessoa (e embedding é derivado dele). A virada de is_anonymized redige os dois (→ `(anonimizado)`, `embedding` → null) pelo gatilho fn_redigir_conversas_ao_anonimizar — a mesma porta da 0391 e a mesma régua que a app usava em lib/lgpd/cascata.ts passo 5. O irmão (lgpd-cascata-alcanca-quem-guarda-pessoa) mantém a entrada na dívida porque o instrumento dele só lê fn_lgpd_cascade_redact_contact + trg_reply_redact, não este gatilho — a dívida lá sai no dia em que aquele instrumento derivar também os gatilhos de contacts, no desenho da 0391.",
   },
   lead_state: {
     decidida: "redigir",
     caminho: "gatilho",
-    razao: "0493 (#1964): a LINHA e o estágio ficam (é o estado do negócio), mas next_action (texto) e qualification (jsonb) — texto livre que cita a pessoa — são zerados na virada de is_anonymized pelo gatilho fn_redigir_conversas_ao_anonimizar (a porta da 0391 que a app já usava em lib/lgpd/cascata.ts passo 7).",
+    razao: "0494 (#1964): a LINHA e o estágio ficam (é o estado do negócio), mas next_action (texto) e qualification (jsonb) — texto livre que cita a pessoa — são zerados na virada de is_anonymized pelo gatilho fn_redigir_conversas_ao_anonimizar (a porta da 0391 que a app já usava em lib/lgpd/cascata.ts passo 7).",
   },
   // ── manter: a linha e o conteúdo ficam, por decisão ───────────────────────
   before_send_traces: {

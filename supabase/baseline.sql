@@ -42987,7 +42987,7 @@ create policy followup_flow_versions_delete on public.followup_flow_versions
   using (organization_id in (select public.fn_user_org_ids())
          and public.fn_role_at_least(organization_id, 'manager'));
 
--- ---- a cascata do BANCO alcança lead_notes, tool_calls, lead_state e social_identity (migration 0493) ----
+-- ---- a cascata do BANCO alcança lead_notes, tool_calls, lead_state e social_identity (migration 0494) ----
 -- Follow-up do #1958 (issue #1964). A dorsa `fn_redigir_conversas_ao_anonimizar`
 -- (gatilho da virada de is_anonymized, desenho da 0391) passou a redigir também:
 --   lead_notes.headline/body (+embedding), ai_agent_runs.tool_calls (preserva o

@@ -1,4 +1,4 @@
--- 0493 — a CASCATA DO BANCO alcança lead_notes, tool_calls, lead_state e social_identity (issue #1964)
+-- 0494 — a CASCATA DO BANCO alcança lead_notes, tool_calls, lead_state e social_identity (issue #1964)
 --
 -- Follow-up do #1958 (@webtecnica). O #1958 levou essas quatro fontes para a
 -- cascata DA APLICAÇÃO (`lib/lgpd/cascata.ts`): a RPC `fn_lgpd_cascade_redact_contact`

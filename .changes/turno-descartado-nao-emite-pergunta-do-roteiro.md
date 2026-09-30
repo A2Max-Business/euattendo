@@ -9,3 +9,5 @@ Quando o #1940 recusa a resposta de um turno porque o cliente escreveu de novo e
 Agora, num turno descartado como obsoleto nada mais sai, nem a pergunta do roteiro: ela fica pendente para o turno da mensagem nova, que lê a conversa inteira. Nenhuma configuração ou ação é necessária.
 
 Refs: #1940, #1943
+
+Contribuição de @webtecnica (#1968).

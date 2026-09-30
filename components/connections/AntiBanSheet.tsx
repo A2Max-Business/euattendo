@@ -435,7 +435,7 @@ export function AntiBanSheet({ item, canWrite, onClose }: Props) {
             </div>
             <p className="text-xs text-muted-foreground">
               {t(
-                "Quanto o agente \"pensa\" antes de mandar a primeira resposta (ver a notificação + digitação por caractere, limitado entre o mínimo e o máximo). Campo vazio usa o padrão — aquecido demais parece robô; lento demais parece que caiu. Não mexe no intervalo entre mensagens.",
+                "Quanto o agente \"pensa\" antes de mandar a primeira resposta (ver a notificação + digitação por caractere, limitado entre o mínimo e o máximo). Campo vazio usa o padrão — rápido demais parece robô; lento demais parece que caiu. Não mexe no intervalo entre mensagens.",
               )}
             </p>
           </fieldset>

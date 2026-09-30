@@ -22,9 +22,6 @@
 -- o par.
 
 alter table public.channel_knobs
-  drop constraint if exists channel_knobs_atraso_humano_saneamento;
-
-alter table public.channel_knobs
   add column if not exists atraso_notar_ms integer,
   add column if not exists ms_por_caractere integer,
   add column if not exists atraso_minimo_ms integer,
@@ -41,6 +38,9 @@ comment on column public.channel_knobs.atraso_maximo_ms is
 
 -- Sanidade: valores positivos e dentro do mesmo teto dos vizinhos (intervalMaxMs).
 -- O `drop … if exists` antes do `add` é o que torna o apêndice reaplicável.
+alter table public.channel_knobs
+  drop constraint if exists channel_knobs_atraso_humano_saneamento;
+
 alter table public.channel_knobs
   add constraint channel_knobs_atraso_humano_saneamento
   check (

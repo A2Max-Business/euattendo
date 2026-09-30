@@ -45223,9 +45223,6 @@ alter table public.channel_knobs
 -- Reaplicável: `add column if not exists` e `drop constraint if exists` antes
 -- do `add constraint` — o `update.sh` roda o apêndice inteiro a cada atualização.
 alter table public.channel_knobs
-  drop constraint if exists channel_knobs_atraso_humano_saneamento;
-
-alter table public.channel_knobs
   add column if not exists atraso_notar_ms integer,
   add column if not exists ms_por_caractere integer,
   add column if not exists atraso_minimo_ms integer,
@@ -45239,6 +45236,9 @@ comment on column public.channel_knobs.atraso_minimo_ms is
   'Piso do atraso humano (ms). NULL = default (1200).';
 comment on column public.channel_knobs.atraso_maximo_ms is
   'Teto do atraso humano (ms). NULL = default (7500).';
+
+alter table public.channel_knobs
+  drop constraint if exists channel_knobs_atraso_humano_saneamento;
 
 alter table public.channel_knobs
   add constraint channel_knobs_atraso_humano_saneamento

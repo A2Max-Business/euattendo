@@ -199,6 +199,17 @@ export async function PUT(req: NextRequest): Promise<Response> {
       { requestId },
     );
   }
+  // Atraso humano (0499), pelo mesmo par-resultante: com os dois gravados o
+  // CHECK do banco recusaria e a tela leria um 500 genérico; com só o mínimo
+  // acima do teto padrão, o clamp ignoraria o mínimo sem aviso.
+  if (eff.atrasoMinimoMs > eff.atrasoMaximoMs) {
+    return fail(
+      "validation_failed",
+      `Atraso humano inválido: o mínimo (${eff.atrasoMinimoMs} ms) precisa ser menor ou igual ao máximo (${eff.atrasoMaximoMs} ms).`,
+      422,
+      { requestId },
+    );
+  }
 
   if (Object.keys(knobFields).length > 0) {
     const { error: upErr } = await admin.from("channel_knobs").upsert(

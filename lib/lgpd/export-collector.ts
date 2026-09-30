@@ -690,6 +690,40 @@ export interface ExportPayload {
     motivo_recusa: string | null;
   }>;
   /**
+   * Memória da IA sobre o titular (#1957): `lead_notes` guarda `headline` +
+   * `body` — o nome e trechos do que a pessoa escreveu. A cascata redige os
+   * dois quando ele pede anonimização; o que se apaga a pedido dele é o que se
+   * entrega a pedido dele (Art. 18 II). Mesmo escopo da cascata: org + contato.
+   */
+  lead_notes?: Array<{
+    id: string;
+    headline: string | null;
+    body: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+  }>;
+  /**
+   * Registro de execução da IA (#1957): `ai_agent_runs.tool_calls` (jsonb)
+   * guarda os argumentos passados às ferramentas — nome do titular e trechos
+   * do que escreveu. Redigido na cascata; entregue no acesso. Org + contato.
+   */
+  ai_agent_runs?: Array<{
+    id: string;
+    tool_calls: unknown;
+    created_at: string | null;
+  }>;
+  /**
+   * Estado da lead (#1957): `lead_state.next_action` (texto) e `qualification`
+   * (jsonb) descrevem o titular por máquina. Redigidos na cascata; entregues
+   * no acesso. Org + contato.
+   */
+  lead_state?: Array<{
+    id: string;
+    next_action: string | null;
+    qualification: unknown;
+    updated_at: string | null;
+  }>;
+  /**
    * Empresas e pessoas (migrations 0448/0449, metade B2B do #1621): a PESSOA
    * para quem o contato aponta, os vínculos dela com empresas e as linhas de
    * planilha que falaram dela. A 0449 redige as três quando o titular pede
@@ -1562,6 +1596,57 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
       if (!data || data.length < 500) break;
     }
   }
+  // Memória da IA, registros de execução e estado da lead — o que a cascata
+  // (#1957) redige a pedido de eliminação, e que o acesso entrega de volta.
+  //
+  // as três têm `contact_id` + `organization_id` na própria linha, então o
+  // escopo sai do mesmo `eq` que a cascata usa — sem depender de derivação
+  // por conversa ou lead. `ai_agent_runs.tool_calls` e `lead_state.qualification`
+  // são jsonb e saem íntegros: o que o titular escreveu não vira resumo.
+  const lead_notes: NonNullable<ExportPayload["lead_notes"]> = [];
+  const ai_agent_runs: NonNullable<ExportPayload["ai_agent_runs"]> = [];
+  const lead_state: NonNullable<ExportPayload["lead_state"]> = [];
+  if (contactId) {
+    const páginaPorContato = async <T extends { id: string }>(
+      tabela: "lead_notes" | "ai_agent_runs" | "lead_state",
+      colunas: string,
+      refino?: (linha: Record<string, unknown>) => T,
+    ): Promise<T[]> => {
+      const linhas: T[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data, error } = await admin
+          .from(tabela)
+          .select(colunas)
+          .eq("organization_id", organizationId)
+          .eq("contact_id", contactId)
+          .order("id")
+          .range(offset, offset + 499);
+        if (error) throw error;
+        const mapa = (data ?? []) as Record<string, unknown>[];
+        linhas.push(...(refino ? mapa.map(refino) : (mapa as unknown as T[])));
+        if (!data || data.length < 500) break;
+      }
+      return linhas;
+    };
+    for (const nota of await páginaPorContato<ExportPayload["lead_notes"][number]>(
+      "lead_notes",
+      "id, headline, body, created_at, updated_at",
+    )) {
+      lead_notes.push(nota);
+    }
+    for (const run of await páginaPorContato<ExportPayload["ai_agent_runs"][number]>(
+      "ai_agent_runs",
+      "id, tool_calls, created_at",
+    )) {
+      ai_agent_runs.push(run);
+    }
+    for (const estado of await páginaPorContato<ExportPayload["lead_state"][number]>(
+      "lead_state",
+      "id, next_action, qualification, updated_at",
+    )) {
+      lead_state.push(estado);
+    }
+  }
   // Casos, linha do tempo do caso e demandas — o que a 0280 pôs na cascata.
   //
   // O escopo do CASO é a CONVERSA do titular: `agent_cases` não tem FK para
@@ -1920,6 +2005,9 @@ export async function collectExportData(args: CollectArgs): Promise<ExportPayloa
     conversation_drafts,
     conversation_notes,
     contact_field_proposals,
+    lead_notes,
+    ai_agent_runs,
+    lead_state,
     b2b,
   };
 }
@@ -1970,5 +2058,8 @@ function emptyPayload(
     campaign_suppressions: [],
     channel_session_groups: [],
     group_messages_authored: [],
+    lead_notes: [],
+    ai_agent_runs: [],
+    lead_state: [],
   };
 }

@@ -217,9 +217,9 @@ as $t$
   select coalesce(jsonb_agg(t.step_json order by t.ord), '[]'::jsonb)
     from (
       select jsonb_strip_nulls(jsonb_build_object(
-               'step', case when jsonb_typeof(s.step ->> 'step') = 'number'
+               'step', case when jsonb_typeof(s.step -> 'step') = 'number'
                             then (s.step ->> 'step')::jsonb end,
-               'tool_name', case when jsonb_typeof(s.step ->> 'tool_name') = 'string'
+               'tool_name', case when jsonb_typeof(s.step -> 'tool_name') = 'string'
                                  then to_jsonb(s.step ->> 'tool_name') end,
                'redacted', true,
                'tool_calls', coalesce((

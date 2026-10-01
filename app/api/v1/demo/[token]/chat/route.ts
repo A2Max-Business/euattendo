@@ -32,7 +32,9 @@ export async function POST(req: NextRequest, { params }: Context): Promise<NextR
 
   // 2. Extração segura do IP do cliente (para rate limit e trava independentes de frontend)
   const forwardedFor = req.headers.get("x-forwarded-for");
-  const ip = forwardedFor ? forwardedFor.split(",")[0].trim() : "ip-cliente-indefinido";
+  const rawFirstIp = forwardedFor ? forwardedFor.split(",")[0] : undefined;
+  const trimmedIp = rawFirstIp ? rawFirstIp.trim() : "";
+  const ip = trimmedIp.length > 0 ? trimmedIp : "ip-cliente-indefinido";
 
   // 3. Validação do token e resolução do agente no servidor (sem fallback silencioso)
   const resolveResult = await resolveDemoAgent(token);
@@ -143,7 +145,7 @@ export async function POST(req: NextRequest, { params }: Context): Promise<NextR
     const { text } = await generateText({
       model: resolvedModel,
       messages,
-      maxTokens: LIMITS.MAX_OUTPUT_TOKENS,
+      maxOutputTokens: LIMITS.MAX_OUTPUT_TOKENS,
       temperature: 0.3,
       abortSignal: AbortSignal.timeout(LIMITS.TIMEOUT_MS),
     });

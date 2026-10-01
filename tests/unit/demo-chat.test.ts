@@ -325,7 +325,7 @@ describe("Suíte de Demonstração Web NB Pneus e Auto Center", () => {
       // Validação dos parâmetros passados ao SDK de IA instalado
       expect(generateText).toHaveBeenCalledTimes(1);
       const callArgs = vi.mocked(generateText).mock.calls[0]![0];
-      expect(callArgs.maxTokens).toBe(LIMITS.MAX_OUTPUT_TOKENS);
+      expect(callArgs.maxOutputTokens).toBe(LIMITS.MAX_OUTPUT_TOKENS);
       expect(callArgs.temperature).toBe(0.3);
       expect(callArgs.abortSignal).toBeDefined();
       expect(callArgs.messages).toEqual(

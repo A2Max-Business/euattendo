@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Paths that bypass auth check in middleware.
  * Match precedence: array order. First match wins.
  */
@@ -26,6 +26,10 @@ export const PUBLIC_PATHS: RegExp[] = [
   // Retorno de OAuth social: documento público sem efeitos que reconecta a
   // navegação interna para manter os cookies de sessão sob SameSite=Strict.
   /^\/auth\/social-return$/,
+  // Volta do provedor de pagamento (checkout, portal): mesma natureza da linha
+  // acima — vem de outro site, o cookie Strict não viaja, e a rota é só a ponte
+  // para um destino FIXO (`app/cobranca/volta/route.ts`), sem efeito.
+  /^\/cobranca\/volta$/,
   /^\/403$/,
   /^\/admin\/forbidden$/,
   /^\/404$/,
@@ -122,6 +126,51 @@ export const PUBLIC_PATHS: RegExp[] = [
   // cartão de fidelidade (a única das automações que não é texto) não teria
   // como sair depois do corte de gateway.
   /^\/api\/v1\/conversations\/[^/]+\/media$/,
+  // CONFIGURAÇÃO DE IA, FOLLOW-UP E AGENDA SERVER-TO-SERVER (issue #1875).
+  // Mesma dualidade das linhas acima: sessão OU Bearer `dsk_…`, resolvidos por
+  // `lib/api/auth-dual.ts` DENTRO de cada rota (a org sai da linha do token e
+  // nunca do body). Quem automatiza a instalação (configuração como código) não
+  // tem navegador — e sem estas entradas o proxy devolve 401 antes do handler,
+  // tornando a dualidade inalcançável por token.
+  //
+  // Ancorados com `$` de propósito: `/^\/api\/v1\/ai\/followup-flows/` daria
+  // carona a `/[id]`, `/publish`, `/duplicate`, `/rollback`, etc., que seguem
+  // só-sessão (publicar e reverter continuam exigindo a tela). O segmento da
+  // versão é uma FORMA DE UUID, nunca `[^/]+` — `/api/v1/ai/agents/` tem irmãos
+  // literais (assignable, [id], etc.) que um padrão largo tornaria públicos.
+  /^\/api\/v1\/ai\/followup-flows$/,
+  /^\/api\/v1\/ai\/followup-flows\/from-model$/,
+  /^\/api\/v1\/ai\/agents$/,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/versions$/i,
+  /^\/api\/v1\/prospecting$/,
+  /^\/api\/v1\/agenda\/tipos$/,
+  // A configuração de serviços valida sessão/Bearer e papel na própria rota.
+  // Só este endpoint: nenhum sub-path futuro herda a passagem pela borda.
+  /^\/api\/v1\/agenda\/servicos$/,
+  // VERSÃO, PUBLICAÇÃO E TESTE DO AGENTE SERVER-TO-SERVER (issue #2052).
+  // Mesma dualidade das linhas acima: sessão OU Bearer `dsk_…`, resolvidos por
+  // `lib/api/auth-dual.ts` DENTRO de cada rota (a org sai da linha do token e
+  // nunca do path). O token precisa de `config:read`/`config:write` E de papel
+  // admin (`tokenRole`), porque trocar o prompt em vigor, publicar versão e
+  // pausar o agente é poder de administração — a sessão continua com o rank de
+  // sempre. Escopo PRÓPRIO, não `mcp:*`: token já emitido não ganha este poder
+  // na atualização sem ser criado de novo (decisão do mantenedor no PR #2194).
+  //
+  // Os dois segmentos são FORMA DE UUID, nunca `[^/]+`: `/api/v1/ai/agents/`
+  // tem irmão literal (`assignable`) e um segmento solto daria carona a ele e a
+  // qualquer outro sub-path que ainda é só-sessão. Âncora `$` em todos: nenhum
+  // caminho futuro nasce público de carona.
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/publish$/i,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/versions\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/agents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/versions\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/test$/i,
+  // ROTEADORES DE IA SERVER-TO-SERVER. Sessão OU Bearer `dsk_…`, resolvidos
+  // dentro dos handlers. Os segmentos dinâmicos aceitam somente forma de UUID
+  // e todos os padrões são ancorados para nenhum irmão futuro entrar de carona.
+  /^\/api\/v1\/ai\/routers$/,
+  /^\/api\/v1\/ai\/routers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\/api\/v1\/ai\/routers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/members$/i,
+  /^\/api\/v1\/ai\/routers\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/test$/i,
   /^\/_next\//,
   /^\/favicon\.ico$/,
   // O ícone da aba (`app/icon.tsx`), que o `<head>` de TODA página pede —
@@ -131,11 +180,11 @@ export const PUBLIC_PATHS: RegExp[] = [
   // antes desta linha: `GET /icon` → 307 para `/login?next=%2Ficon`, enquanto
   // `/icon.png` (inexistente) devolvia 404 — a diferença é só a extensão.
   /^\/icon$/,
-  // PNGs públicos do app instalado, apenas dois tamanhos e somente marca da instalação.
-  /^\/app-icon\/(192|512)$/,
+  // PNGs públicos do app instalado, só os tamanhos que o manifest e o iPhone
+  // pedem, e somente com a marca da instalação.
+  /^\/app-icon\/(180|192|512|maskable)$/,
   /^\/manifest\.webmanifest$/,
   /^\/team\/accept-invite\/.+$/,
-  /^\/account-suspended$/,
   // OS MOLDES DE E-MAIL DO GoTrue. Quem busca é o GoTrue, um processo de
   // terceiro que não tem — nem pode ter — sessão nossa. O conteúdo é HTML com
   // placeholders Go (`{{ .TokenHash }}`) mais nome, cor e logo da instalação,
@@ -152,9 +201,6 @@ export const PUBLIC_PATHS: RegExp[] = [
   // dois nomes de propósito: `/^\/legal/` deixaria qualquer sub-path futuro
   // nascer público de carona.
   /^\/legal\/(terms|privacy)$/,
-  // Demonstração Web de Atendimento por IA (isolada por token no servidor)
-  /^\/demo\/[0-9a-zA-Z_-]+$/,
-  /^\/api\/v1\/demo\/[0-9a-zA-Z_-]+\/(chat|info)$/,
 ];
 
 export function isPublicPath(pathname: string): boolean {

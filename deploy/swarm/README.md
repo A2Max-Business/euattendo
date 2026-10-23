@@ -43,3 +43,5 @@ Antes de abrir produção: configurar SMTP; aplicar baseline do CRM da revisão 
 Os segredos são armazenados em arquivos root-only e variáveis de serviços, visíveis a administradores Docker/Portainer. Não são Docker Secrets, pois os serviços oficiais não aceitam uniformemente entradas por arquivo. Restringir administradores e backups. Não ativar atualização automática concorrente do kit Compose nesta stack Swarm. As imagens seguem tags da revisão oficial; o deploy deve registrar os digests efetivamente resolvidos.
 
 Nunca executar `docker stack rm`, `down -v`, reset de banco, limpeza de volumes ou regeneração de chaves como tentativa automática de consertar uma falha.
+
+Correção de permissões: clones feitos com umask 077 deixam SQL público em 600/root. O preparador normaliza somente `volumes/db/*.sql` para 644, permitindo leitura pelo usuário do PostgreSQL dentro do container. Diretório raiz, arquivos de credenciais e dados do banco não têm permissões ampliadas. Em instalação já iniciada, só corrigir permissões não reaplica o bootstrap: inspecionar o erro inicial e o estado dos schemas antes de recuperar os scripts faltantes, com backup.

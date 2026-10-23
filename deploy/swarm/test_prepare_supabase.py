@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location('prepare', Path(__file__).with_name('prepare_supabase.py'))
 prepare = importlib.util.module_from_spec(SPEC)
@@ -13,6 +14,20 @@ SPEC.loader.exec_module(prepare)
 
 
 class PreparationTests(unittest.TestCase):
+    def test_sql_permissions_do_not_change_secrets_or_database_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sql = root / 'volumes/db/roles.sql'
+            sql.parent.mkdir(parents=True)
+            sql.write_text('-- public initialization code')
+            data = sql.parent / 'data'
+            data.mkdir()
+            (data / 'internal.sql').write_text('database data')
+            (root / '.env').write_text('secret')
+            with patch.object(prepare.os, 'chmod') as chmod:
+                prepare.normalize_sql_permissions(root)
+            chmod.assert_called_once_with(sql, 0o644)
+
     def test_tokens_and_secrets(self):
         env = prepare.make_environment({'POSTGRES_PASSWORD': 'example', 'OPENAI_API_KEY': 'example'})
         self.assertNotEqual(env['POSTGRES_PASSWORD'], 'example')

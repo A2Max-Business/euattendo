@@ -74,6 +74,15 @@ def write_private(path, content):
         stream.write(content)
 
 
+def normalize_sql_permissions(root):
+    # git clone under umask 077 creates root-only SQL. The DB entrypoint runs
+    # psql as its unprivileged OS user; these public, individually mounted
+    # scripts must be readable inside the container. Never recurse into data,
+    # and never relax .env or other credential files.
+    for sql in (root / 'volumes/db').glob('*.sql'):
+        os.chmod(sql, 0o644)
+
+
 def command(args, cwd=None, env=None):
     result = subprocess.run(args, cwd=cwd, env=env, capture_output=True, text=True)
     if result.returncode:
@@ -185,6 +194,7 @@ def main():
     os.umask(0o077)
     shutil.copytree(source / 'docker', target)
     os.chmod(target, 0o700)
+    normalize_sql_permissions(target)
     env = make_environment(read_template(target / '.env.example'))
     write_private(target / '.env', ''.join(k + '=' + v + '\n' for k, v in env.items()))
     # Required bind sources must exist before Swarm scheduling (no implicit mkdir).

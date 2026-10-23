@@ -56,6 +56,7 @@ class PreparationTests(unittest.TestCase):
                            'depends_on': {'db': {}}, 'environment': {'SERVICE_ROLE_KEY': env['SERVICE_ROLE_KEY']}},
                 'auth': {'image': 'auth:example', 'entrypoint': None, 'command': None, 'environment': {'DATABASE_URL': 'postgres://user:' + env['POSTGRES_PASSWORD'] + '@db/postgres'}},
                 'realtime': {'image': 'realtime:example'},
+                'storage': {'image': 'storage:example', 'healthcheck': {'test': ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://storage:5000/status']}},
                 'supavisor': {'image': 'unused:example', 'ports': [{'target': 5432}]}}, 'volumes': {}}
             stack = prepare.make_stack(config, env, 'vmi3691925')
             self.assertNotIn('supavisor', stack['services'])
@@ -70,6 +71,7 @@ class PreparationTests(unittest.TestCase):
             self.assertEqual(stack['services']['db']['environment']['POSTGRES_PASSWORD'], '${POSTGRES_PASSWORD}')
             self.assertIn('${POSTGRES_PASSWORD}', stack['services']['auth']['environment']['DATABASE_URL'])
             self.assertNotIn(env['SERVICE_ROLE_KEY'], json.dumps(stack))
+            self.assertEqual(stack['services']['storage']['healthcheck']['test'][-1], 'http://127.0.0.1:5000/status')
             self.assertIn('realtime-dev.supabase-realtime', stack['services']['realtime']['networks']['private']['aliases'])
             rule = stack['services']['api-gw']['deploy']['labels']['traefik.http.routers.euattendo-supabase.rule']
             self.assertIn('database.euattendo.com.br', rule)

@@ -128,6 +128,13 @@ def make_stack(config, env, node):
         service['logging'] = {'driver': 'json-file', 'options': {'max-size': '10m', 'max-file': '3'}}
         if 'healthcheck' in service:
             service['healthcheck']['start_period'] = '180s'
+        if name == 'storage':
+            # A Swarm VIP/DNS alias may not be available until the task is healthy.
+            # Probe this process via loopback, independent of service discovery.
+            service['healthcheck']['test'] = [
+                'CMD', 'wget', '--no-verbose', '--tries=1', '--spider',
+                'http://127.0.0.1:5000/status',
+            ]
         if name == 'api-gw':
             prefixes = ('auth', 'rest', 'realtime', 'storage', 'functions', 'graphql')
             paths = ' || '.join(f'PathPrefix(`/{p}/v1/`) || Path(`/{p}/v1`)' for p in prefixes)

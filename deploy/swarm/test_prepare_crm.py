@@ -9,6 +9,11 @@ spec.loader.exec_module(crm)
 
 
 class CrmTests(unittest.TestCase):
+    def test_private_helper_grant_is_limited_to_trusted_wrapper_owner(self):
+        self.assertIn('private.fn_oauth_key() TO postgres', crm.CRYPTO_OWNER_GRANTS)
+        self.assertNotIn('TO PUBLIC', crm.CRYPTO_OWNER_GRANTS)
+        self.assertNotIn('TO service_role', crm.CRYPTO_OWNER_GRANTS)
+        self.assertNotIn('TO euattendo_worker', crm.CRYPTO_OWNER_GRANTS)
     def test_existing_database_keys_are_preserved(self):
         existing = {'cpf_key': 'c' * 40, 'nuvemshop_oauth_key': 'n' * 40}
         env = crm.make_environment({'ANON_KEY': 'anon', 'SERVICE_ROLE_KEY': 'service'}, existing)

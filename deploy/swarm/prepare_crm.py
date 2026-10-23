@@ -20,6 +20,14 @@ IMAGES = {
     'scheduler': 'ghcr.io/melgarafael/deskcomm-scheduler@sha256:d96c6e824f7ed4726fcb0e73b77e0024b781297df3927d0e4055484802705758',
 }
 
+# The dump retains postgres ownership on the OAuth wrappers, while helpers
+# created by the appended migrations belong to the baseline administrator.
+# Only the wrapper's trusted owner gets helper access, never API/worker roles.
+CRYPTO_OWNER_GRANTS = """
+GRANT USAGE ON SCHEMA private TO postgres;
+GRANT EXECUTE ON FUNCTION private.fn_oauth_key() TO postgres;
+"""
+
 
 def read_env(path):
     values = {}
@@ -190,6 +198,7 @@ def main():
     cpf_key = env['CPF_ENCRYPTION_KEY'].replace("'", "''")
     oauth_key = env['NUVEMSHOP_OAUTH_ENCRYPTION_KEY'].replace("'", "''")
     sql = f"""BEGIN;
+{CRYPTO_OWNER_GRANTS}
 INSERT INTO private.app_secrets (name,value) VALUES ('cpf_key','{cpf_key}'), ('nuvemshop_oauth_key','{oauth_key}') ON CONFLICT (name) DO NOTHING;
 CREATE ROLE euattendo_worker LOGIN PASSWORD '{password}' BYPASSRLS;
 GRANT CONNECT ON DATABASE postgres TO euattendo_worker;

@@ -102,6 +102,9 @@ def make_stack(config, env, node):
             service['networks']['proxy'] = {}
         if name == 'db':
             service['networks']['private'] = {'aliases': ['supabase-db']}
+        if name == 'realtime':
+            # Official Envoy CDS resolves this container_name, not just the service name.
+            service['networks']['private'] = {'aliases': ['realtime-dev.supabase-realtime']}
         for mount in service.get('volumes', []):
             if mount['type'] == 'bind':
                 path = Path(mount['source'])
@@ -187,6 +190,8 @@ def main():
     # Required bind sources must exist before Swarm scheduling (no implicit mkdir).
     for directory in ('volumes/db/data', 'volumes/storage', 'volumes/snippets', 'volumes/functions'):
         (target / directory).mkdir(parents=True, exist_ok=True)
+    # imgproxy can read the storage mount without accessing the root-only parent directory.
+    os.chmod(target / 'volumes/storage', 0o755)
     process_env = dict(os.environ)
     process_env.update(env)
     process_env.pop('COMPOSE_FILE', None)

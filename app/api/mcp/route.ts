@@ -9,6 +9,7 @@
  * envelope com `error.code` MCP (-32001/-32002/etc).
  */
 import { randomUUID } from "node:crypto";
+import { recursoOAuth, origemOAuth } from "@/lib/mcp/oauth/protocolo";
 import type { NextRequest } from "next/server";
 
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -45,10 +46,30 @@ async function handle(req: NextRequest): Promise<Response> {
   try {
     // Empresa suspensa entra marcada: o servidor só deixa a privacidade
     // responder (LGPD nunca é bloqueada — decisão do dono, 30/09).
-    auth = await validateBearerToken(req.headers.get("authorization"), { permiteOrgSuspensa: true });
+    let resource: string | undefined;
+    try {
+      resource = recursoOAuth();
+    } catch {
+      /* OAuth exige HTTPS; Bearer legado continua disponível. */
+    }
+    auth = await validateBearerToken(req.headers.get("authorization"), {
+      permiteOrgSuspensa: true,
+      resource,
+    });
   } catch (err) {
     if (err instanceof McpAuthError) {
-      return jsonRpcError(err.mcpCode, err.message, err.httpStatus);
+      const response = jsonRpcError(err.mcpCode, err.message, err.httpStatus);
+      if (err.httpStatus === 401) {
+        try {
+          response.headers.set(
+            "WWW-Authenticate",
+            `Bearer resource_metadata="${origemOAuth()}/.well-known/oauth-protected-resource/api/mcp", scope="mcp:read"`,
+          );
+        } catch {
+          /* Instalações HTTP legadas preservam o 401. */
+        }
+      }
+      return response;
     }
     const msg = err instanceof Error ? err.message : "auth_failed";
     return jsonRpcError(-32603, msg, 500);

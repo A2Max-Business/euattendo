@@ -1283,6 +1283,7 @@ export const AUDIT_ACTIONS = [
   // papel — nunca o texto do papel, que é livre.
   "lead.participant_added",
   "lead.participant_removed",
+  "oauth.consent_granted",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

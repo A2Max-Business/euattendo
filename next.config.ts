@@ -120,6 +120,9 @@ const nextConfig: NextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
+  // A compilação não envia estatísticas ao serviço externo.
+  // A telemetria de execução continua sob SENTRY_DSN, configurado pelo operador.
+  telemetry: false,
   // For all available options, see:
   // https://www.npmjs.com/package/@sentry/webpack-plugin#options
 

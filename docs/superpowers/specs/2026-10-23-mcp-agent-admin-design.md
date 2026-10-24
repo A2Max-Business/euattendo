@@ -16,7 +16,7 @@ Alex autorizou ampliar a integração existente para criar agentes, configurar i
 - Ferramentas: listar/consultar agentes e versões; criar rascunho; editar cadastro; criar/editar versão; publicar; pausar pelo contrato canônico; testar versão; listar opções (ferramentas de atendimento, canais, modelos e referências de credencial sem segredos); cadastrar conhecimento por texto/FAQ e listar fontes.
 - Prompt, conteúdo de conhecimento e texto de teste são retirados dos argumentos da auditoria MCP; a auditoria de efeito das rotas permanece.
 - Organização suspensa, teto por token/organização, referências de outra empresa, ferramentas inexistentes e versão publicada imutável continuam recusados pelos gates existentes.
-- Conhecimento: usar a mesma ingestão e fila da tela. Retornar o estado real; material cadastrado não significa indexação concluída. Upload binário e edição de fluxos FUP ficam fora desta entrega.
+- Conhecimento: usar a mesma ingestão e fila da tela. A criação retorna o identificador e se a indexação está habilitada; consultar a lista para conhecer o estado real. Material cadastrado não significa indexação concluída. Upload binário e edição de fluxos FUP ficam fora desta entrega.
 - Teste de versão usa o sandbox existente; não envia WhatsApp. Publicar é ação separada e pode ligar atendimento; não será chamado como teste.
 
 ## Dados e prova

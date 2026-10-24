@@ -15,6 +15,7 @@ test("admin externo cria e treina rascunho sem oferecer auto-administração ao 
   if (created.error || !created.data.user) throw created.error;
   const userId = created.data.user.id;
   const orgs: string[] = [];
+  const tokenIds = new Map<string, string>();
   async function organization() {
     const { data, error } = await db.from("organizations").insert({
       slug: `admin-mcp-${randomUUID()}`, display_name: "MCP Administração", legal_name: "MCP Administração", onboarded_at: new Date().toISOString(),
@@ -25,12 +26,13 @@ test("admin externo cria e treina rascunho sem oferecer auto-administração ao 
   }
   async function token(organizationId: string, scopes: string[]) {
     const bearer = `dsk_${randomBytes(32).toString("base64url")}`;
-    const { error } = await db.from("api_tokens").insert({
+    const { data, error } = await db.from("api_tokens").insert({
       organization_id: organizationId, created_by: userId, name: "Prova administrativa MCP",
       prefix: bearer.slice(0, 12), token_hash: `\\x${createHash("sha256").update(bearer).digest("hex")}`,
       scopes, expires_at: new Date(Date.now() + 3600000).toISOString(),
-    });
-    if (error) throw error;
+    }).select("id").single();
+    if (error || !data) throw error ?? new Error("Token sem ID");
+    tokenIds.set(bearer, data.id);
     return bearer;
   }
   async function mcp(bearer: string, method: string, params?: Record<string, unknown>) {
@@ -60,6 +62,8 @@ test("admin externo cria e treina rascunho sem oferecer auto-administração ao 
     for (const bearer of [ordinary, agent]) {
       const list = await mcp(bearer, "tools/list");
       expect(list.result.tools.some((tool: { name: string }) => tool.name.startsWith("crm_admin_"))).toBe(false);
+      const refused = await mcp(bearer, "tools/call", { name: "crm_admin_get_agent_options", arguments: {} });
+      expect(Boolean(refused.error || refused.result?.isError)).toBe(true);
     }
     const { data: model, error: modelError } = await db.from("ai_models")
       .select("provider, model_id").eq("supports_tools", true).is("deprecated_at", null).limit(1).single();
@@ -73,15 +77,40 @@ test("admin externo cria e treina rascunho sem oferecer auto-administração ao 
     const id = saved.data.agent.id, vid = saved.data.version.id;
     expect(saved.data.agent.published_version_id).toBeNull();
     expect(saved.data.version.status).toBe("draft");
+    const source = await call(admin, "crm_admin_add_knowledge", {
+      name: "Política de atendimento MCP", source_type: "faq",
+      markdown_blob: "## Pergunta: Como atender?\n## Resposta: Consulte informações confirmadas e não invente preços.",
+    });
+    expect(typeof source.data.indexacao_habilitada).toBe("boolean");
+    const materials = await call(admin, "crm_admin_list_knowledge", {});
+    expect(materials.data).toEqual(expect.arrayContaining([expect.objectContaining({ id: source.data.id })]));
     const prompt = "Identifique a necessidade do cliente e consulte o catálogo antes de informar preços.";
     await call(admin, "crm_admin_update_agent_draft", { agent_id: id, version_id: vid,
-      patch: { system_prompt: prompt, tool_ids: ["crm_list_pipelines", "crm_search_products"] } });
+      patch: { system_prompt: prompt, tool_ids: ["crm_list_pipelines", "crm_search_products"], knowledge_source_ids: [source.data.id], operator_enabled: true, operator_model: `${model.provider}/${model.model_id}`, operator_tool_ids: ["crm_list_pipelines"] } });
     const version = await call(admin, "crm_admin_get_agent_version", { agent_id: id, version_id: vid });
     expect(version.data.system_prompt).toBe(prompt);
     expect(version.data.tool_ids).toEqual(["crm_list_pipelines", "crm_search_products"]);
     expect(version.data.status).toBe("draft");
+    expect(version.data.knowledge_source_ids).toEqual([source.data.id]);
+    expect(version.data.operator_tool_ids).toEqual(["crm_list_pipelines"]);
+    expect(version.data.operator_enabled).toBe(true);
     const denied = await mcp(await token(other, scopes), "tools/call", { name: "crm_admin_get_agent", arguments: { agent_id: id } });
     expect(denied.result.isError).toBe(true);
+    const otherToken = await token(other, scopes);
+    const deniedPause = await mcp(otherToken, "tools/call", { name: "crm_admin_pause_agent", arguments: { agent_id: id } });
+    expect(deniedPause.result.isError).toBe(true);
+    const beforePause = await db.from("ai_agents").select("published_version_id, paused_at").eq("id", id).single();
+    expect(beforePause.data?.published_version_id).toBeNull();
+    expect(beforePause.data?.paused_at).toBeNull();
+    await call(admin, "crm_admin_pause_agent", { agent_id: id });
+    await expect.poll(async () => {
+      const audit = await db.from("api_audit_log").select("id").eq("organization_id", org)
+        .eq("action", "ai_agent.paused").eq("actor_api_token_id", tokenIds.get(admin)!);
+      if (audit.error) throw audit.error;
+      return audit.data.length;
+    }).toBeGreaterThan(0);
+    const forged = await request.post(`/api/v1/ai/agents/${id}/pause`, { headers: { "x-mcp-admin": "true", "x-organization-id": org }, data: {} });
+    expect([401, 403]).toContain(forged.status());
     await page.goto("/login");
     await page.getByLabel(/e-?mail/i).fill(email);
     await page.getByLabel(/senha/i).fill(password);

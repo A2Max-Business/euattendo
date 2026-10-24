@@ -133,7 +133,7 @@ export function createAdminTools(auth: McpAuthResult): AdminTool[] {
         const { GET } = await import("@/app/api/v1/ai/knowledge/sources/route");
         return delegate(auth, ctx, "GET", "/api/v1/ai/knowledge/sources", GET);
       }),
-    tool("crm_admin_add_knowledge", "Cadastra texto de treinamento ou FAQ na ingestão canônica. O material pertence à empresa; vincule seu ID à versão do agente. Leia o estado retornado e não prometa indexação concluída se estiver pendente. Não recebe senhas ou chaves.",
+    tool("crm_admin_add_knowledge", "Cadastra texto de treinamento ou FAQ na ingestão canônica. O material pertence à empresa; vincule seu ID à versão do agente. Retorna id, quantidade de itens e se a indexação está habilitada; consulte crm_admin_list_knowledge para verificar o estado real, last_index_status e chunks_count antes de afirmar que foi indexado. Para FAQ, use pares ## Pergunta: e ## Resposta:. Não recebe senhas ou chaves.",
       { name: z.string().trim().min(2).max(120), source_type: z.enum(["documento", "faq"]),
         markdown_blob: z.string().trim().min(1).max(100000) }, "write", async (input, ctx) => {
         const { POST } = await import("@/app/api/v1/ai/knowledge/sources/route");

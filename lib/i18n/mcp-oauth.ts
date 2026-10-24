@@ -1,4 +1,10 @@
 export const TEXTOS_MCP_OAUTH = {
+  "Esta conexão também poderá consultar a configuração dos agentes de IA.": {
+    es: "Esta conexión también podrá consultar la configuración de los agentes de IA.",
+  },
+  "Poderá criar agentes, editar instruções e conhecimento, mudar permissões, testar, publicar e pausar o atendimento automático.": {
+    es: "Podrá crear agentes, editar instrucciones y conocimiento, cambiar permisos, probar, publicar y pausar la atención automática.",
+  },
   "Entre como administrador da empresa, com a verificação de segurança concluída, para autorizar esta conexão.":
     {
       es: "Entre como administrador de la empresa, con la verificación de seguridad completada, para autorizar esta conexión.",

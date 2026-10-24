@@ -63,3 +63,9 @@ describe("contrato OAuth MCP", () => {
     );
   });
 });
+
+// Configuração é autorização nova, nunca derivada de mcp:write.
+it("aceita escopos administrativos explícitos sem ampliar os anteriores", () => {
+  expect(escoposPermitidos("config:read config:write")).toEqual(["config:read", "config:write"]);
+  expect(escoposPermitidos("mcp:write")).toEqual(["mcp:write"]);
+});

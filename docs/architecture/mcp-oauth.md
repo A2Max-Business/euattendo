@@ -7,7 +7,7 @@ Revogação: Configurações → Tokens de API → Revogar. API REST recusa os t
 ## Instalação e prova
 Preparar imagem própria por CI; não editar o contêiner ativo. NEXT_PUBLIC_APP_URL deve ser a origem HTTPS pública exata. Cadastrar o MCP nessa origem em /api/mcp com OAuth. Provar no navegador: login/MFA, empresa indicada, recusa sem credencial, autorização, descoberta tools/list e revogação bloqueando chamada posterior. Provar troca da organização em outra aba recusando o consentimento antigo. Validar por duas réplicas que um código só emite uma vez.
 
-Esta entrega mantém o catálogo existente. Editar/publicar agentes pela API REST não se torna ferramenta MCP automaticamente. A conexão não concede acesso SSH, Docker ou banco.
+A administração de agentes é um catálogo externo separado e exige os escopos explícitos config:read/config:write e papel admin (ver mcp-agent-admin.md). Conexões anteriores não ganham esses escopos. A conexão não concede acesso SSH, Docker ou banco.
 
 ## Living System Checklist
 1. Entrada: pedido do cliente externo com redirect previamente registrado e PKCE.

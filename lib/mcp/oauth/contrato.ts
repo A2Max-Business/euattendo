@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 export const ESCOPO_OAUTH_PADRAO = "mcp:read";
-export const ESCOPO_OAUTH = ["mcp:read", "mcp:write"] as const;
+export const ESCOPO_OAUTH = ["mcp:read", "mcp:write", "config:read", "config:write"] as const;
 export const PRAZO_CODIGO_SEG = 300;
 export const PRAZO_PEDIDO_SEG = 600;
 export const PRAZO_TOKEN_SEG = 24 * 60 * 60;

@@ -20,6 +20,7 @@ import { McpAuthError, ensureRole, ensureScope, type McpAuthResult } from "./aut
 import { verificarTetoMcp } from "./rate-limit";
 import { tamanhoDoResultado } from "./resultado-bytes";
 import { allTools } from "./tools";
+import { createAdminTools } from "./admin/tools";
 import { deCapacidadeDesligada, deModuloDesligado } from "./tools/catalog";
 import { higienizarUuidsDeAterro } from "./uuid-de-aterro";
 import type { McpContext } from "./types";
@@ -56,7 +57,7 @@ export function createMcpServer(
 
   const supabase = createAdminClient();
 
-  for (const tool of allTools) {
+  for (const tool of [...allTools, ...createAdminTools(auth)]) {
     if (deModuloDesligado(tool.name, modulosLigados)) continue;
     if (deCapacidadeDesligada(tool.name, capacidadesLigadas)) continue;
     server.registerTool(

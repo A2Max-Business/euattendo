@@ -41,7 +41,9 @@ export default async function AutorizarMcp({ params }: { params: Promise<{ reque
     return <p>{t("Não foi possível preparar a autorização. Tente novamente mais tarde.")}</p>;
   if (!prepared) return <p>{t("Pedido expirado. Reinicie a conexão no aplicativo.")}</p>;
   const { pedido, client, nonce } = prepared;
-  const escreve = escoposPermitidos(pedido.scope).includes("mcp:write");
+  const escopos = escoposPermitidos(pedido.scope);
+  const escreve = escopos.includes("mcp:write");
+  const administra = escopos.some(escopo => escopo.startsWith("config:"));
   return (
     <main className="mx-auto max-w-xl space-y-5 p-6">
       <h1 className="text-2xl font-semibold">{t("Autorizar conexão MCP")}</h1>
@@ -71,6 +73,11 @@ export default async function AutorizarMcp({ params }: { params: Promise<{ reque
           "O acesso vence em 24 horas. Você pode revogá-lo em Configurações → Tokens de API. Autorize somente se você iniciou esta conexão.",
         )}
       </p>
+      {administra && (
+        <p>{t("Esta conexão também poderá consultar a configuração dos agentes de IA.")}
+          {escopos.includes("config:write") && " " + t("Poderá criar agentes, editar instruções e conhecimento, mudar permissões, testar, publicar e pausar o atendimento automático.")}
+        </p>
+      )}
       <form method="post" action="/api/mcp/oauth/consent" className="flex gap-4">
         <input type="hidden" name="nonce" value={nonce} />
         <button name="decision" value="allow" className="rounded-md border px-4 py-2">

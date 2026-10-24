@@ -218,4 +218,14 @@ describe("PATCH .../versions/:vid — atualização parcial", () => {
       },
     ]);
   });
+  it("persiste habilitação, modelo e permissões do operador", async () => {
+    const { PATCH } = await import("./route");
+    const request = new NextRequest("http://localhost/api/v1/ai/agents/x/versions/y", {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operator_enabled: true, operator_model: "anthropic/claude-sonnet-4-6", operator_tool_ids: ["crm_list_pipelines"] }),
+    });
+    const response = await PATCH(request, { params: Promise.resolve({ id: AGENT, vid: VERSION }) });
+    expect(response.status).toBe(200);
+    expect(atualizacoes[0]).toMatchObject({ operator_enabled: true, operator_model: "anthropic/claude-sonnet-4-6", operator_tool_ids: ["crm_list_pipelines"] });
+  });
 });

@@ -133,6 +133,9 @@ export async function PATCH(req: NextRequest, ctx: Ctx): Promise<Response> {
   if (patch.model !== undefined) update.model = patch.model;
   if (patch.credential_id !== undefined) update.credential_id = patch.credential_id;
   if (patch.tool_ids !== undefined) update.tool_ids = patch.tool_ids;
+  if (patch.operator_enabled !== undefined) update.operator_enabled = patch.operator_enabled;
+  if (patch.operator_model !== undefined) update.operator_model = patch.operator_model;
+  if (patch.operator_tool_ids !== undefined) update.operator_tool_ids = patch.operator_tool_ids;
   if (patch.trigger_config !== undefined) update.trigger_config = patch.trigger_config;
   if (patch.channel_session_id !== undefined) update.channel_session_id = patch.channel_session_id;
   if (patch.max_steps !== undefined) update.max_steps = patch.max_steps;

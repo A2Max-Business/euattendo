@@ -902,6 +902,7 @@ jobs:
         agenda-papel-de-leitura.spec.ts
         agenda-busca-cliente-pelo-nome-do-perfil.spec.ts
         agente-organiza-operacao.spec.ts
+        mcp-admin-agents.spec.ts
         central-de-avisos-capacidades.spec.ts
         escalacao-ciclo.spec.ts
         distribuicao-atendimento.spec.ts

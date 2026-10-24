@@ -19,6 +19,8 @@ import { ok, fail } from "@/lib/api/wrappers";
 import { loadAuthUser } from "@/lib/auth/server";
 import { orgAtivaDaApi, requireRole } from "@/lib/auth/require-role";
 import { createClient } from "@/lib/supabase/server";
+import { resolveAuthDual, tetoDeEscritaDoToken, type AuthDual } from "@/lib/api/auth-dual";
+import { getMcpAdminIdentity } from "@/lib/api/mcp-admin-context";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseFaqMarkdown } from "@/lib/ai/rag/ingest/faq";
 import { temChaveDeEmbedding } from "@/lib/ai/embeddings/chave";
@@ -71,21 +73,34 @@ const SELECT_COLUNAS =
 // GET
 // ---------------------------------------------------------------------------
 
+async function knowledgeAuth(req: NextRequest, write: boolean, requestId: string): Promise<AuthDual> {
+  if (getMcpAdminIdentity(req)) return resolveAuthDual(req, {
+    requestId, resource: "ai_knowledge", role: "admin", tokenRole: "admin",
+    scope: write ? "config:write" : "config:read",
+  });
+  // Preserve the existing browser policy; no new public REST path is added.
+  if (write) {
+    const authz = await requireRole("manager", { requestId, resource: "ai_knowledge" });
+    if (!authz.ok) return authz;
+    return { ok: true, organizationId: authz.org.orgId, actor: { type: "user", id: authz.user.id },
+      supabase: await createClient(), via: "session", idioma: authz.user.idioma };
+  }
+  const authUser = await loadAuthUser();
+  if (!authUser) return { ok: false, response: fail("unauthenticated", "Auth required.", 401, { requestId }) };
+  const ativa = await orgAtivaDaApi(authUser, requestId);
+  if (!ativa.ok) return ativa;
+  if (!ativa.org) return { ok: false, response: fail("forbidden", "Nenhuma organização ativa.", 403, { requestId }) };
+  return { ok: true, organizationId: ativa.org.orgId, actor: { type: "user", id: authUser.id },
+    supabase: await createClient(), via: "session" };
+}
+
 export async function GET(_req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
 
-  const authUser = await loadAuthUser();
-  if (!authUser) {
-    return fail("unauthenticated", "Auth required.", 401, { requestId });
-  }
-  const ativa = await orgAtivaDaApi(authUser, requestId);
-  if (!ativa.ok) return ativa.response;
-  const activeOrg = ativa.org;
-  if (!activeOrg) {
-    return fail("forbidden", "Nenhuma organização ativa.", 403, { requestId });
-  }
-
-  const supabase = await createClient();
+  const authz = await knowledgeAuth(_req, false, requestId);
+  if (!authz.ok) return authz.response;
+  const { supabase } = authz;
+  const activeOrg = { orgId: authz.organizationId };
   const { data, error } = await supabase
     .from("ai_knowledge_sources")
     .select(SELECT_COLUNAS)
@@ -112,10 +127,12 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const requestId = randomUUID();
 
-  const authz = await requireRole("manager", { requestId, resource: "ai_knowledge" });
+  const authz = await knowledgeAuth(req, true, requestId);
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { org: activeOrg } = authz;
+  const teto = await tetoDeEscritaDoToken(authz, "ai_knowledge", requestId);
+  if (teto) return teto;
+  const t = (texto: string) => traduzir(texto, authz.idioma ?? "pt-BR");
+  const activeOrg = { orgId: authz.organizationId };
 
   let rawBody: unknown;
   try {
@@ -158,7 +175,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
-  const supabase = await createClient();
+  const supabase = authz.supabase;
 
   // `agent_id` é HISTÓRICO. Continua validado — mandar o id de um agente de
   // outra organização tem de doer — mas não decide mais quem lê o material.

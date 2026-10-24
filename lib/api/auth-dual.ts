@@ -43,6 +43,7 @@ import {
 import { JANELA_SEGUNDOS, TETO_DE_ESCRITA, TETO_POR_ORGANIZACAO } from "@/lib/mcp/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { getMcpAdminIdentity } from "./mcp-admin-context";
 
 export type AuthDual =
   | {
@@ -93,6 +94,28 @@ export async function resolveAuthDual(
   req: NextRequest,
   { requestId, resource, role, scope, tokenRole }: AuthDualOptions,
 ): Promise<AuthDual> {
+  const delegated = getMcpAdminIdentity(req);
+  if (delegated) {
+    try {
+      if (delegated.actor.type !== "api_token")
+        throw new McpAuthError(-32002, 403, "A administração exige uma integração externa.");
+      ensureRole(delegated.role, "admin");
+      ensureRole(delegated.role, tokenRole ?? role);
+      ensureScope([...delegated.scopes], scope);
+    } catch (error) {
+      if (!(error instanceof McpAuthError)) throw error;
+      return { ok: false, response: fail("forbidden", error.message, 403, { requestId }) };
+    }
+    return {
+      ok: true,
+      organizationId: delegated.organizationId,
+      actor: delegated.actor,
+      supabase: createAdminClient(),
+      via: "token",
+      scopes: [...delegated.scopes],
+      apiTokenId: delegated.apiTokenId,
+    };
+  }
   const authHeader = req.headers.get("authorization");
 
   if (extractBearer(authHeader)) {

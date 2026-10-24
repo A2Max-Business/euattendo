@@ -433,3 +433,20 @@ describe("validateBearerToken — a tradução para MCP não mudou", () => {
     ).not.toBeInstanceOf(McpAuthError);
   });
 });
+
+describe("OAuth: audiência aplicada no resolvedor compartilhado", () => {
+  const resource = "https://crm.example/api/mcp";
+  it("token MCP não autentica uma rota REST sem audiência", async () => {
+    const reg = armar(achou(linhaViva({ scopes: ["mcp:read", `oauth:resource:${resource}`] })));
+    await expect(resolveApiToken(PLAINTEXT)).rejects.toMatchObject({ reason: "invalid_audience" });
+    expect(reg.updates).toEqual([]);
+  });
+  it("mesmo token autentica no recurso autorizado", async () => {
+    armar(achou(linhaViva({ scopes: ["mcp:read", `oauth:resource:${resource}`] })));
+    await expect(resolveApiToken(PLAINTEXT, { resource })).resolves.toMatchObject({ organizationId: ORG_ID });
+  });
+  it("revogação continua valendo com audiência correta", async () => {
+    armar(achou(linhaViva({ scopes: ["mcp:read", `oauth:resource:${resource}`], revoked_at: NO_PASSADO })));
+    await expect(resolveApiToken(PLAINTEXT, { resource })).rejects.toMatchObject({ reason: "revoked" });
+  });
+});

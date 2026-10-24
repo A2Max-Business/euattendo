@@ -532,3 +532,18 @@ Sentry breadcrumbs: 1 por tool call, com `tool_name`, `duration_ms`, `error_code
 - Spec 01 — `api_tokens` table reusada para auth bearer
 - Spec 02/03/04 — handlers REST que as tools encapsulam
 - Spec 12 — UI mostra catálogo de tools para tenant escolher por agente
+
+## OAuth para clientes externos (EuAttendo)
+
+A implementação em `lib/mcp/oauth/` acrescenta descoberta RFC 8414/9728,
+registro dinâmico de clientes públicos e autorização por código com PKCE S256.
+A configuração detalhada e as limitações desta entrega estão em
+`docs/architecture/mcp-oauth.md`. A autorização exige administrador da empresa
+ativa, segue a MFA da sessão e não aceita sessão temporária de suporte.
+O pedido viaja no segmento dinâmico do caminho para sobreviver ao retorno da MFA.
+
+A credencial OAuth tem audiência exclusiva de `/api/mcp`, validade de 24 horas,
+somente hash em `api_tokens` e revogação na tela existente. Não há refresh token;
+após expirar, reconectar. A autenticação `dsk_` legada continua compatível.
+Esta camada de conexão não acrescenta ferramentas administrativas ao catálogo.
+Exige origem pública HTTPS e Redis compartilhado disponível; nenhuma nova tabela.

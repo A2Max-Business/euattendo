@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "lanes": [
+    {
+      "id": "external",
+      "label": "Conexão"
+    },
+    {
+      "id": "auth",
+      "label": "Autorização"
+    },
+    {
+      "id": "app",
+      "label": "Aplicação"
+    },
+    {
+      "id": "state",
+      "label": "Persistência"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "client",
+      "lane": "external",
+      "label": "Administrador externo"
+    },
+    {
+      "id": "oauth",
+      "lane": "auth",
+      "label": "OAuth: escopos config explícitos"
+    },
+    {
+      "id": "tools",
+      "lane": "app",
+      "label": "Catálogo administrativo externo"
+    },
+    {
+      "id": "identity",
+      "lane": "auth",
+      "label": "Identidade por instância Request"
+    },
+    {
+      "id": "handlers",
+      "lane": "app",
+      "label": "Handlers canônicos de configuração"
+    },
+    {
+      "id": "data",
+      "lane": "state",
+      "label": "Versões e conhecimento"
+    },
+    {
+      "id": "audit",
+      "lane": "state",
+      "label": "Auditoria de efeito e chamada"
+    }
+  ],
+  "mainPath": [
+    "client",
+    "oauth",
+    "tools",
+    "identity",
+    "handlers",
+    "data"
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "from": "client",
+      "to": "oauth"
+    },
+    {
+      "id": "e1",
+      "from": "oauth",
+      "to": "tools"
+    },
+    {
+      "id": "e2",
+      "from": "tools",
+      "to": "identity"
+    },
+    {
+      "id": "e3",
+      "from": "identity",
+      "to": "handlers"
+    },
+    {
+      "id": "e4",
+      "from": "handlers",
+      "to": "data"
+    },
+    {
+      "id": "e5",
+      "from": "handlers",
+      "to": "audit"
+    },
+    {
+      "id": "e6",
+      "from": "tools",
+      "to": "audit"
+    }
+  ]
+}

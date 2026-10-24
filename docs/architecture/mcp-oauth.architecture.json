@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "lanes": [
+    {
+      "id": "externo",
+      "label": "Cliente e operador"
+    },
+    {
+      "id": "app",
+      "label": "Aplicação"
+    },
+    {
+      "id": "estado",
+      "label": "Estado compartilhado"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "client",
+      "lane": "externo",
+      "label": "Cliente MCP"
+    },
+    {
+      "id": "discovery",
+      "lane": "app",
+      "label": "Descoberta e registro"
+    },
+    {
+      "id": "consent",
+      "lane": "app",
+      "label": "Consentimento admin e MFA"
+    },
+    {
+      "id": "redis",
+      "lane": "estado",
+      "label": "Redis: pedido e código de uso único"
+    },
+    {
+      "id": "token",
+      "lane": "estado",
+      "label": "api_tokens: hash e expiração"
+    },
+    {
+      "id": "mcp",
+      "lane": "app",
+      "label": "MCP: audiência, papel e escopo"
+    },
+    {
+      "id": "ui",
+      "lane": "externo",
+      "label": "Tokens de API: revogar"
+    },
+    {
+      "id": "audit",
+      "lane": "estado",
+      "label": "Auditoria"
+    }
+  ],
+  "edges": [
+    {
+      "id": "e0",
+      "from": "client",
+      "to": "discovery"
+    },
+    {
+      "id": "e1",
+      "from": "discovery",
+      "to": "redis"
+    },
+    {
+      "id": "e2",
+      "from": "discovery",
+      "to": "consent"
+    },
+    {
+      "id": "e3",
+      "from": "consent",
+      "to": "redis"
+    },
+    {
+      "id": "e4",
+      "from": "redis",
+      "to": "token"
+    },
+    {
+      "id": "e5",
+      "from": "token",
+      "to": "mcp"
+    },
+    {
+      "id": "e6",
+      "from": "mcp",
+      "to": "client"
+    },
+    {
+      "id": "e7",
+      "from": "token",
+      "to": "ui"
+    },
+    {
+      "id": "e8",
+      "from": "ui",
+      "to": "token"
+    },
+    {
+      "id": "e9",
+      "from": "consent",
+      "to": "audit"
+    },
+    {
+      "id": "e10",
+      "from": "mcp",
+      "to": "audit"
+    }
+  ]
+}

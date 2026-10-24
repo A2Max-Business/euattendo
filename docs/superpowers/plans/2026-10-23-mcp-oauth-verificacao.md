@@ -30,12 +30,21 @@ inclui esse commit e os ajustes posteriores de infraestrutura já presentes no G
   drain-loop-carrega-deps-sob-tsx.test.ts, channel-adapter-zernio.test.ts e
   pdf-extractor.test.ts. A rodada ampla não teve conclusão confirmada neste ambiente. O teste de i18n e o de Tailwind inicialmente
   apontaram defeitos da tela nova; ambos foram corrigidos e passaram na rodada final.
-- Build: compilação Turbopack chegou a “Compiled successfully”; a revisão automática
-  bloqueou a continuidade porque o build tentou contatar Sentry. Não se afirma
-  build completo, imagem publicada ou prontidão para produção.
+- Build completo aprovado no GitHub (run 40042016122). Imagens app e serviços de
+  fundo construídas em amd64 e arm64 (run 40042016069); em PR o workflow não publica.
+- CI amplo: seis partes verify passaram; parte 7 falhou pela duplicação do namespace
+  no preparador Swarm. Corrigida a leitura da declaração central, sem mudar os digests;
+  nove testes Python passaram, incluindo troca real do namespace em checkout temporário.
+- Invariants aplicou o baseline em install/update, mas parou antes da suíte por
+  falta de release neste fork. O CI agora busca as tags publicadas do upstream
+  explicitamente para exercitar os mesmos scripts, sem omitir a conferência.
+- E2E: seis partes passaram; parte 6 teve uma falha ao abrir painel de marcação
+  em agenda-google-meet.spec.ts. Reexecução isolada solicitada para verificar
+  reprodutibilidade; ainda sem conclusão. Correções novas aguardam CI.
 
 ## Entrega operacional
-Nenhuma alteração foi aplicada à VPS. Não abrir PR que dispare builds externos nem
-publicar imagem antes de resolver o envio ao Sentry de forma autorizada.
+Nenhuma alteração foi aplicada à VPS. Publicação do código e builds autorizados pelo
+usuário. A telemetria do plug-in Sentry no build foi desativada; PR #8 aberto como
+rascunho. A imagem de instalação ainda não foi publicada.
 A primeira versão conecta o catálogo já existente; não dá acesso ao Docker, SSH,
 nem transforma endpoints de configuração de agentes em ferramentas MCP.

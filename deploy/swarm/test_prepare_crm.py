@@ -1,6 +1,8 @@
 import base64
 import importlib.util
 from pathlib import Path
+import shutil
+import tempfile
 import unittest
 
 spec = importlib.util.spec_from_file_location('crm', Path(__file__).with_name('prepare_crm.py'))
@@ -9,6 +11,22 @@ spec.loader.exec_module(crm)
 
 
 class CrmTests(unittest.TestCase):
+    def test_pinned_images_follow_the_shared_namespace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / 'deploy/swarm/prepare_crm.py'
+            script.parent.mkdir(parents=True)
+            shutil.copyfile(Path(__file__).with_name('prepare_crm.py'), script)
+            common = root / 'hostgator-setup-kit/_common.sh'
+            common.parent.mkdir()
+            common.write_text('IMG_NS="registry.example/our-crm"\n', encoding='utf-8')
+            spec = importlib.util.spec_from_file_location('crm_fork', script)
+            fork = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(fork)
+            for name, image in crm.IMAGES.items():
+                repository_and_digest = image.rsplit('/', 1)[1]
+                self.assertEqual(fork.IMAGES[name], 'registry.example/our-crm/' + repository_and_digest)
+
     def test_private_helper_grant_is_limited_to_trusted_wrapper_owner(self):
         self.assertIn('private.fn_oauth_key() TO postgres', crm.CRYPTO_OWNER_GRANTS)
         self.assertNotIn('TO PUBLIC', crm.CRYPTO_OWNER_GRANTS)

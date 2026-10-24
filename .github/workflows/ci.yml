@@ -634,6 +634,20 @@ jobs:
         # aceita `timeout-minutes`. Razão e medições: o cabeçalho da action.
         timeout-minutes: 5
 
+      # This fork initially runs the upstream release on its VPS and has no
+      # releases of its own. Exercise the actual released updater rather than
+      # skipping the compatibility check or inventing a release in the fork.
+      - name: Preparar releases herdadas para a conferência do kit
+        if: github.repository == 'A2Max-Business/euattendo'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release="$(gh release view --repo melgarafael/DeskcommCRM --json tagName -q .tagName)"
+          [[ "$release" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          git fetch --no-tags --depth=1 https://github.com/melgarafael/DeskcommCRM.git "+refs/tags/$release:refs/tags/$release" '+refs/tags/v1.63.0:refs/tags/v1.63.0'
+          printf 'CONFERENCIA_KIT_RELEASE=%s\n' "$release" >> "$GITHUB_ENV"
+
       - name: RLS isolation + governance invariants (pg${{ matrix.pg }})
         # O token é só para `gh release view`: o test:db confere o update.sh da
         # última release publicada (issue #1909), e a API anônima tem teto de 60

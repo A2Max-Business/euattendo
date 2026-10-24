@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import subprocess
 import sys
@@ -14,10 +15,16 @@ from urllib.parse import urlsplit
 REVISION = '04a4a72bbe424c7c5c4701748ee2594c1f04baaa'
 SOURCE = '48739b8889b59b3117ab90058cac486740cf62f0'
 BASE = Path('/opt/euattendo-swarm')
+# Read the shared declaration as data; importing this preparer must not execute shell.
+_common = Path(__file__).resolve().parents[2] / 'hostgator-setup-kit/_common.sh'
+_namespace = re.findall(r'^IMG_NS="([^"\r\n]+)"$', _common.read_text(encoding='utf-8'), re.MULTILINE)
+if len(_namespace) != 1 or not re.fullmatch(r'[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._-]+', _namespace[0]):
+    raise RuntimeError('Namespace das imagens ausente ou invalido no kit compartilhado.')
+IMG_NS = _namespace[0]
 IMAGES = {
-    'app': 'ghcr.io/melgarafael/deskcommcrm@sha256:888635bdf68f72eb91a7b5ada1bfdb56065f0b4e089206974959a40f24478cba',
-    'worker': 'ghcr.io/melgarafael/deskcomm-worker@sha256:ed32aeb87ca820d17500f4b86833005a0e330c7e8b61efb6528a6b824459250c',
-    'scheduler': 'ghcr.io/melgarafael/deskcomm-scheduler@sha256:d96c6e824f7ed4726fcb0e73b77e0024b781297df3927d0e4055484802705758',
+    'app': f'{IMG_NS}/deskcommcrm@sha256:888635bdf68f72eb91a7b5ada1bfdb56065f0b4e089206974959a40f24478cba',
+    'worker': f'{IMG_NS}/deskcomm-worker@sha256:ed32aeb87ca820d17500f4b86833005a0e330c7e8b61efb6528a6b824459250c',
+    'scheduler': f'{IMG_NS}/deskcomm-scheduler@sha256:d96c6e824f7ed4726fcb0e73b77e0024b781297df3927d0e4055484802705758',
 }
 
 # The dump retains postgres ownership on the OAuth wrappers, while helpers

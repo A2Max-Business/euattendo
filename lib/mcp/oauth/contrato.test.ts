@@ -37,10 +37,10 @@ describe("contrato OAuth MCP", () => {
     ])
       expect(redirectSeguro(value)).toBe(false);
   });
-  it("não permite aumentar escopos nem papel via OAuth", () => {
+  it("recusa papel e escopos não publicados via OAuth", () => {
     expect(escoposPermitidos("mcp:read mcp:write")).toEqual(["mcp:read", "mcp:write"]);
     expect(() => escoposPermitidos("role:admin")).toThrow();
-    expect(() => escoposPermitidos("config:write")).toThrow();
+    expect(() => escoposPermitidos("config:root")).toThrow();
   });
   it("vincula código ao cliente, redirect exato e recurso", () => {
     const request = {

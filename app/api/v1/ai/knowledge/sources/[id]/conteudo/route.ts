@@ -20,27 +20,26 @@
 import { randomUUID } from "node:crypto";
 
 import { fail, ok } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { lerConteudoDoMaterial } from "@/lib/ai/knowledge/conteudo-do-material";
 import { traduzir } from "@/lib/i18n/dicionario";
-import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const requestId = randomUUID();
   const { id: sourceId } = await params;
 
-  const authz = await requireRole("manager", { requestId, resource: "ai_knowledge" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "ai_knowledge" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const t = (texto: string) => traduzir(texto, authz.idioma);
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
   const leitura = await lerConteudoDoMaterial(supabase, {
-    orgId: authz.org.orgId,
+    orgId: authz.organizationId,
     sourceId,
   });
 

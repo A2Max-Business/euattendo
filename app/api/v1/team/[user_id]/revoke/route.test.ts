@@ -58,7 +58,8 @@ function mockBanco(opts: MockBancoOpts) {
   ultimoUpdate = null;
   const update = vi.fn((valores: Record<string, unknown>) => {
     ultimoUpdate = valores;
-    return { eq: vi.fn(async () => ({ error: null })) };
+    const query = { eq: vi.fn(() => query), then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve) };
+    return query;
   });
 
   vi.mocked(createClient).mockResolvedValue({

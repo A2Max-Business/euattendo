@@ -20,6 +20,7 @@ export async function issueInvite(input: {
   organizationId: string;
   orgName: string;
   inviterId: string;
+  actorApiTokenId?: string;
   inviterName: string;
   requestId: string;
   inviteId?: string;
@@ -89,7 +90,8 @@ export async function issueInvite(input: {
     }
     await audit({
       action: "member.invited",
-      actorUserId: input.inviterId,
+      actorUserId: input.actorApiTokenId ? null : input.inviterId,
+      actorApiTokenId: input.actorApiTokenId,
       organizationId: input.organizationId,
       resourceType: "membership",
       resourceId: inviteId,

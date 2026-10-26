@@ -8,8 +8,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +17,7 @@ const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
-export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
@@ -28,17 +27,17 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
     return fail("invalid_request", "id inválido.", 400, { requestId });
   }
 
-  const authz = await requireRole("manager", { requestId, resource: "followup_flows" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "followup_flows" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
 
-  const supabase = await createClient();
+
+  const supabase = await authz.getClient();
   const { data: existing, error: fetchErr } = await supabase
     .from("followup_flow_pointers")
     .select("id, status")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
   if (!existing) return fail("not_found", t("Fluxo não encontrado."), 404, { requestId });
@@ -51,7 +50,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
     .from("followup_flow_pointers")
     .update({ status: "disabled", updated_at: new Date().toISOString() })
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .select("id, status, updated_at")
     .single();
   if (updErr || !updated) {
@@ -62,8 +61,9 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
 
   void audit({
     action: "followup_flow.disabled",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "followup_flow_pointer",
     resourceId: id,
     requestId,

@@ -43,9 +43,8 @@ import { sincronizarRecebimentoDeGrupos } from "@/lib/grupos/sincronizar-filtro"
 import { mfaEmDivida } from "@/lib/auth/server";
 import { audit } from "@/lib/audit";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
-import { createClient } from "@/lib/supabase/server";
 import { getWahaClient, wahaFriendlyError } from "@/lib/waha/client";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -72,22 +71,22 @@ export async function POST(
   const parsedBody = reconnectSchema.safeParse(rawBody ?? {});
   const force = parsedBody.success ? (parsedBody.data.force ?? false) : false;
 
-  const authz = await requireRole("admin", {
+  const authz = await resolveConfigurationAuth(req, "admin", {
     requestId,
     resource: "channel_sessions",
     allowPlatformAdmin: true,
   });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
-  if (await mfaEmDivida()) return fail("mfa_required", "Confirme a verificação em duas etapas.", 403, { requestId });
+  const t = (texto: string) => traduzir(texto, authz.idioma);
 
-  const supabase = await createClient();
+  if (authz.via === "session" && await mfaEmDivida()) return fail("mfa_required", "Confirme a verificação em duas etapas.", 403, { requestId });
+
+  const supabase = await authz.getClient();
   const buscar = (colunas: string) =>
     supabase
       .from("channel_sessions")
       .select(colunas)
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .eq("id", id)
       .maybeSingle();
   // Tolerante à coluna ausente: num clone sem a migration 0106 nada está
@@ -155,7 +154,7 @@ export async function POST(
     }
     try {
       nomeParaOTransporte = await renomearSessaoParaOTeto(createAdminClient(), {
-        id: session.id, organization_id: activeOrg.orgId, waha_session_name: nomeSessao,
+        id: session.id, organization_id: authz.organizationId, waha_session_name: nomeSessao,
       });
     } catch {
       return fail(
@@ -168,7 +167,7 @@ export async function POST(
   }
 
   try {
-    await assertWahaConnectionIdle(createAdminClient(), activeOrg.orgId, id);
+    await assertWahaConnectionIdle(createAdminClient(), authz.organizationId, id);
     await waha.stopSession(nomeParaOTransporte);
     // Só no modo forçado: descartar a credencial é irreversível — obriga a
     // reescanear o QR mesmo que ela ainda estivesse boa.
@@ -183,7 +182,7 @@ export async function POST(
       : waha.startSession(nomeParaOTransporte))) as { status?: string };
     const nextStatus = remote.status ?? "STARTING";
     const patch = { status: nextStatus, status_reason: null, last_status_change_at: new Date().toISOString(), consecutive_health_fails: 0 };
-    const { error: syncError } = await supabase.from("channel_sessions").update(patch).eq("organization_id", activeOrg.orgId).eq("id", id);
+    const { error: syncError } = await supabase.from("channel_sessions").update(patch).eq("organization_id", authz.organizationId).eq("id", id);
 
     if (syncError) throw new Error("connection_sync_failed");
 
@@ -193,13 +192,14 @@ export async function POST(
     await sincronizarRecebimentoDeGrupos(
       createAdminClient(),
       (ref, receber) => waha.definirRecebimentoDeGrupos(ref, receber),
-      { organizationId: activeOrg.orgId, channelSessionId: id, sessionRef: nomeParaOTransporte },
+      { organizationId: authz.organizationId, channelSessionId: id, sessionRef: nomeParaOTransporte },
     );
 
     void audit({
       action: "channel.reconnected",
-      actorUserId: user.id,
-      organizationId: activeOrg.orgId,
+      actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+      organizationId: authz.organizationId,
       resourceType: "channel_session",
       resourceId: id,
       requestId,
@@ -210,7 +210,7 @@ export async function POST(
   } catch (err) {
     if (err instanceof ChannelConnectionError) return fail(err.code, "Uma conexão está em andamento. Aguarde e tente novamente.", err.status, { requestId });
     await supabase.from("channel_sessions").update({ status: "FAILED", status_reason: "connection_repair_required", last_status_change_at: new Date().toISOString() })
-      .eq("organization_id", activeOrg.orgId).eq("id", id);
+      .eq("organization_id", authz.organizationId).eq("id", id);
     return fail("waha_error", wahaFriendlyError(err), 502, { requestId });
   }
 }

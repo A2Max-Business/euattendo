@@ -38,15 +38,14 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { traduzirLimiteDoPlano } from "@/lib/cobranca/limites";
-import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ user_id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -55,17 +54,17 @@ export async function POST(
   const requestId = randomUUID();
   const { user_id: targetUserId } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  const authz = await resolveConfigurationAuth(req, "admin", { requestId, resource: "team" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
 
-  const supabase = await createClient();
+
+  const supabase = await authz.getClient();
 
   const { data: target, error: fetchErr } = await supabase
     .from("user_organizations")
     .select("id, user_id, role, revoked_at")
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("user_id", targetUserId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
@@ -81,19 +80,20 @@ export async function POST(
   const { error: updErr } = await supabase
     .from("user_organizations")
     .update({ revoked_at: null, updated_at: nowIso })
-    .eq("id", target.id);
+    .eq("id", target.id).eq("organization_id", authz.organizationId);
   if (updErr) {
     // O gatilho de assentos do plano (spec cobrança §5) recusa com PT402 quando
     // devolver esta pessoa passaria do teto — é instrução para quem clicou.
-    const limite = traduzirLimiteDoPlano(updErr, authz.user.idioma);
+    const limite = traduzirLimiteDoPlano(updErr, authz.idioma);
     if (limite) return fail(limite.code, limite.message, 409, { requestId, details: limite.details });
     return fail("internal_error", updErr.message, 500, { requestId });
   }
 
   await audit({
     action: "member.reactivated",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "membership",
     resourceId: target.id,
     requestId,

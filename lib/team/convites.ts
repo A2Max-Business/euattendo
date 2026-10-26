@@ -81,6 +81,7 @@ interface EmitirParams {
   role: Role;
   interfaceSettings?: InterfaceSettings;
   inviterId: string;
+  actorApiTokenId?: string;
   inviterName: string;
   requestId: string;
 }
@@ -134,6 +135,7 @@ export async function emitirConvite(
     organizationId: params.organizationId,
     orgName: params.orgName,
     inviterId: params.inviterId,
+    actorApiTokenId: params.actorApiTokenId,
     inviterName: params.inviterName,
     requestId: params.requestId,
     inviteId,

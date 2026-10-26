@@ -365,12 +365,13 @@ describe("validateBearerToken — a tradução para MCP não mudou", () => {
     });
   }
 
-  it("um token válido continua devolvendo o mesmo `McpAuthResult`", async () => {
+  it("um token válido preserva contrato e identifica quem provisionou a integração", async () => {
     armar(achou(linhaViva()));
 
     const r = await validateBearerToken(`Bearer ${PLAINTEXT}`);
 
     expect(r).toEqual({
+      ownerUserId: CRIADOR_ID,
       organizationId: ORG_ID,
       role: "agent",
       // `api_token`, NUNCA `user` — ver `lib/mcp/auth-ator.test.ts`, que é o

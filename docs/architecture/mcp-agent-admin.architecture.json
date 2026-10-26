@@ -47,12 +47,17 @@
     {
       "id": "data",
       "lane": "state",
-      "label": "Versões e conhecimento"
+      "label": "Agentes, conhecimento, FUP, equipe e operação"
     },
     {
       "id": "audit",
       "lane": "state",
       "label": "Auditoria de efeito e chamada"
+    },
+    {
+      "id": "config_auth",
+      "lane": "auth",
+      "label": "Autorização de configuração por Request"
     }
   ],
   "mainPath": [
@@ -98,6 +103,16 @@
       "id": "e6",
       "from": "tools",
       "to": "audit"
+    },
+    {
+      "id": "e7",
+      "from": "identity",
+      "to": "config_auth"
+    },
+    {
+      "id": "e8",
+      "from": "config_auth",
+      "to": "handlers"
     }
   ]
 }

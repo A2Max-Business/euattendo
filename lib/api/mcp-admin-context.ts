@@ -3,6 +3,7 @@ import type { Role } from "@/lib/auth/types";
 
 /** Process-local delegation, never a header or serialized credential. */
 export interface McpAdminIdentity {
+  ownerUserId?: string;
   organizationId: string;
   role: Role;
   actor: Actor;

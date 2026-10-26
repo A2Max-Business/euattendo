@@ -24,6 +24,8 @@ import { ehOperante } from "@/lib/organizacao/operante";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface McpAuthResult {
+  /** Token provisioner, resolved from the token record; never a caller-selected user. */
+  ownerUserId?: string;
   organizationId: string;
   role: Role;
   actor: Actor;
@@ -270,6 +272,7 @@ export async function validateBearerToken(
 
   return {
     organizationId: resolved.organizationId,
+    ownerUserId: resolved.createdBy,
     role,
     actor,
     apiTokenId: resolved.id,

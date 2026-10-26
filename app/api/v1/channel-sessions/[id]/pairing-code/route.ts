@@ -1,9 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { requireSupportWrite } from "@/lib/impersonate/support";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { mfaEmDivida } from "@/lib/auth/server";
-import { createClient } from "@/lib/supabase/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import {
@@ -24,18 +23,18 @@ export async function POST(
   const headers = { "Cache-Control": "no-store, max-age=0" };
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
-  const authz = await requireRole("admin", {
+  const authz = await resolveConfigurationAuth(req, "admin", {
     requestId,
     resource: "channel_sessions",
     allowPlatformAdmin: true,
   });
   if (!authz.ok) return authz.response;
-  if (await mfaEmDivida())
+  if (authz.via === "session" && await mfaEmDivida())
     return fail("mfa_required", "Confirme a verificação em duas etapas.", 403, {
       requestId,
       headers,
     });
-  const t = (text: string) => traduzir(text, authz.user.idioma);
+  const t = (text: string) => traduzir(text, authz.idioma);
   const path = z.object({ id: z.string().uuid() }).safeParse(await params);
   const body = input.safeParse(await req.json().catch(() => null));
   if (!path.success || !body.success)
@@ -47,15 +46,16 @@ export async function POST(
     );
   try {
     const result = await requestChannelPairingCode(
-      await createClient(),
-      authz.org.orgId,
+      await authz.getClient(),
+      authz.organizationId,
       path.data.id,
       body.data.phone_number,
     );
     void audit({
       action: "channel.pairing_code_requested",
-      actorUserId: authz.user.id,
-      organizationId: authz.org.orgId,
+      actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+      organizationId: authz.organizationId,
       resourceType: "channel_session",
       resourceId: path.data.id,
       requestId,

@@ -111,6 +111,63 @@ test("admin externo cria e treina rascunho sem oferecer auto-administração ao 
     }).toBeGreaterThan(0);
     const forged = await request.post(`/api/v1/ai/agents/${id}/pause`, { headers: { "x-mcp-admin": "true", "x-organization-id": org }, data: {} });
     expect([401, 403]).toContain(forged.status());
+    const flowName = `Retorno MCP ${randomUUID().slice(0, 8)}`;
+    const flow = await call(admin, "crm_admin_create_followup_flow", { name: flowName });
+    expect(flow.data.organization_id).toBe(org);
+    await call(admin, "crm_admin_update_followup_flow", { id: flow.data.id,
+      patch: { handoff_policy: "pause", trigger_config: { kind: "manual", cancel_on_reply: true } } });
+    const flowSaved = await call(admin, "crm_admin_get_followup_flow", { id: flow.data.id });
+    expect(flowSaved.data.trigger_config.cancel_on_reply).toBe(true);
+    const deniedFlow = await mcp(otherToken, "tools/call", {
+      name: "crm_admin_update_followup_flow", arguments: { id: flow.data.id, patch: { name: "Outra empresa" } },
+    });
+    expect(deniedFlow.result.isError).toBe(true);
+    const productName = `Produto MCP ${randomUUID().slice(0, 8)}`;
+    const product = await call(admin, "crm_admin_create_product", {
+      codigo: `MCP-${randomUUID().slice(0, 8)}`, nome: productName, preco_cents: 12500,
+    });
+    await call(admin, "crm_admin_update_product", { id: product.data.id, patch: { preco_cents: 15000 } });
+    const deniedProduct = await mcp(otherToken, "tools/call", {
+      name: "crm_admin_update_product", arguments: { id: product.data.id, patch: { preco_cents: 1 } },
+    });
+    expect(deniedProduct.result.isError).toBe(true);
+    const productRow = await db.from("catalog_products").select("preco_cents, organization_id").eq("id", product.data.id).single();
+    expect(productRow.data).toMatchObject({ preco_cents: 15000, organization_id: org });
+    const webhookUrl = "https://hooks.invariant.test/private-path?token=synthetic-credential";
+    const rule = await call(admin, "crm_admin_create_automation", {
+      name: `Regra MCP ${randomUUID().slice(0, 8)}`, trigger_event: "message.received",
+      actions: [{ type: "call_webhook", config: { url: webhookUrl } }],
+    });
+    expect(rule.data.is_active).toBe(false);
+    expect(JSON.stringify(rule)).not.toContain("synthetic-credential");
+    await call(admin, "crm_admin_update_automation", { id: rule.data.id,
+      patch: { actions: rule.data.actions, name: "Regra MCP editada" } });
+    const ruleRow = await db.from("automation_rules").select("actions, is_active").eq("id", rule.data.id).single();
+    expect(ruleRow.data?.actions[0].config.url).toBe(webhookUrl);
+    expect(ruleRow.data?.is_active).toBe(false);
+    const deniedRule = await mcp(otherToken, "tools/call", {
+      name: "crm_admin_update_automation", arguments: { id: rule.data.id, patch: { name: "Outra empresa" } },
+    });
+    expect(deniedRule.result.isError).toBe(true);
+    const pipelineName = `Funil MCP ${randomUUID().slice(0, 8)}`;
+    const pipelines = await call(admin, "crm_admin_create_pipeline", { name: pipelineName });
+    const pipeline = pipelines.data.pipelines.find((row: { name: string }) => row.name === pipelineName);
+    expect(pipeline?.id).toBeTruthy();
+    const deniedPipeline = await mcp(otherToken, "tools/call", {
+      name: "crm_admin_update_pipeline", arguments: { id: pipeline.id, patch: { name: "Outra empresa" } },
+    });
+    expect(deniedPipeline.result.isError).toBe(true);
+    const invitedEmail = `equipe-mcp-${randomUUID()}@invariant.test`;
+    const invite = await call(admin, "crm_admin_invite_members", { invitations: [{ email: invitedEmail, role: "agent" }] });
+    expect(invite.data.failed).toEqual([]);
+    const inviteId = invite.data.sent[0].invite_id;
+    const inviteRow = await db.from("team_invites").select("organization_id, invited_by, role").eq("id", inviteId).single();
+    expect(inviteRow.data).toMatchObject({ organization_id: org, invited_by: userId, role: "agent" });
+    await expect.poll(async () => {
+      const audit = await db.from("api_audit_log").select("actor_user_id, actor_api_token_id")
+        .eq("organization_id", org).eq("resource_id", inviteId).eq("action", "member.invited");
+      return audit.data;
+    }).toEqual(expect.arrayContaining([expect.objectContaining({ actor_user_id: null, actor_api_token_id: tokenIds.get(admin) })]));
     await page.goto("/login");
     await page.getByLabel(/e-?mail/i).fill(email);
     await page.getByLabel(/senha/i).fill(password);
@@ -119,6 +176,12 @@ test("admin externo cria e treina rascunho sem oferecer auto-administração ao 
     await page.goto("/app/ai/agents");
     await expect(page.getByText(name, { exact: true })).toBeVisible();
     await page.screenshot({ path: info.outputPath("agente-criado-por-mcp.png"), fullPage: true });
+    await page.goto("/app/ai/followups");
+    await expect(page.getByText(flowName, { exact: true }).first()).toBeVisible();
+    await page.screenshot({ path: info.outputPath("fluxo-criado-por-mcp.png"), fullPage: true });
+    await page.goto("/app/products");
+    await expect(page.getByText(productName, { exact: true }).first()).toBeVisible();
+    await page.screenshot({ path: info.outputPath("produto-criado-por-mcp.png"), fullPage: true });
   } finally {
     for (const org of orgs) await db.from("organizations").delete().eq("id", org);
     await db.auth.admin.deleteUser(userId);

@@ -9,6 +9,18 @@ const auth = {
   scopes: ["mcp:read", "mcp:write", "config:read", "config:write"],
 } as McpAuthResult;
 describe("catálogo administrativo só do MCP externo", () => {
+  it("oferece configuração de FUP, automações e estrutura comercial sem administração da plataforma", () => {
+    const names = createAdminTools(auth).map(t => t.name);
+    for (const name of ["crm_admin_create_followup_flow", "crm_admin_get_followup_flow",
+      "crm_admin_update_followup_flow", "crm_admin_publish_followup_flow", "crm_admin_disable_followup_flow",
+      "crm_admin_create_pipeline", "crm_admin_update_pipeline", "crm_admin_create_product",
+      "crm_admin_update_product", "crm_admin_create_automation", "crm_admin_update_automation",
+      "crm_admin_get_knowledge", "crm_admin_update_knowledge", "crm_admin_archive_knowledge",
+      "crm_admin_reindex_knowledge", "crm_admin_list_channels", "crm_admin_create_channel",
+      "crm_admin_reconnect_channel", "crm_admin_get_pairing_code", "crm_admin_invite_members",
+      "crm_admin_change_member_role", "crm_admin_list_invites"]) expect(names).toContain(name);
+    expect(names.some(n => /tenant|platform|plan_limit/.test(n))).toBe(false);
+  });
   it("não concede administração a tokens anteriores, papéis menores ou agentes", () => {
     expect(createAdminTools({ ...auth, scopes: ["mcp:read", "mcp:write"] })).toEqual([]);
     expect(createAdminTools({ ...auth, role: "manager" })).toEqual([]);

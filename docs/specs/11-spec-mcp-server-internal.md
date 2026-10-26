@@ -547,3 +547,12 @@ somente hash em `api_tokens` e revogação na tela existente. Não há refresh t
 após expirar, reconectar. A autenticação `dsk_` legada continua compatível.
 Esta camada de conexão não acrescenta ferramentas administrativas ao catálogo.
 Exige origem pública HTTPS e Redis compartilhado disponível; nenhuma nova tabela.
+
+## MCP Geral — configuração da própria empresa
+
+O catálogo externo administrativo é construído por `createAdminTools(auth)` e exige integração
+`api_token`, papel `admin` e escopos `config:read`/`config:write`. Ele não entra em `allTools` nem
+no catálogo que agentes autônomos escolhem. Abrange agentes, conhecimento, FUP, automações,
+equipe, canais e estrutura comercial pelos handlers da interface existente. Tenant é fixado no
+token; operações de plataforma/cotas não são expostas. Contrato de delegação, URLs protegidas,
+auditoria e migration da reserva de canais: `docs/architecture/mcp-agent-admin.md`.

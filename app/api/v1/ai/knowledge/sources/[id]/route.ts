@@ -11,9 +11,8 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { aceitaTextoColado, canonizarTipoDeFonte } from "@/lib/ai/rag/tipos-de-fonte";
 
 export const dynamic = "force-dynamic";
@@ -39,10 +38,10 @@ const patchSourceSchema = z.object({
 // Shared: resolve auth + role gate
 // ---------------------------------------------------------------------------
 
-async function resolveContext(requestId: string) {
-  const authz = await requireRole("manager", { requestId, resource: "ai_knowledge" });
+async function resolveContext(req: NextRequest, requestId: string) {
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "ai_knowledge" });
   if (!authz.ok) return { error: authz.response };
-  return { authUser: authz.user, activeOrg: authz.org };
+  return { activeOrg: { orgId: authz.organizationId }, supabase: await authz.getClient() };
 }
 
 // ---------------------------------------------------------------------------
@@ -54,17 +53,16 @@ async function resolveContext(requestId: string) {
 // — o pior desfecho possível para um botão chamado "editar".
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const requestId = randomUUID();
   const { id: sourceId } = await params;
 
-  const ctx = await resolveContext(requestId);
+  const ctx = await resolveContext(req, requestId);
   if (ctx.error) return ctx.error;
-  const { activeOrg } = ctx as Exclude<typeof ctx, { error: Response }>;
+  const { activeOrg, supabase } = ctx as Exclude<typeof ctx, { error: Response }>;
 
-  const supabase = await createClient();
   const { data: fonte, error } = await supabase
     .from("ai_knowledge_sources")
     .select(
@@ -108,9 +106,9 @@ export async function PATCH(
   const requestId = randomUUID();
   const { id: sourceId } = await params;
 
-  const ctx = await resolveContext(requestId);
+  const ctx = await resolveContext(req, requestId);
   if (ctx.error) return ctx.error;
-  const { activeOrg } = ctx as Exclude<typeof ctx, { error: Response }>;
+  const { activeOrg, supabase } = ctx as Exclude<typeof ctx, { error: Response }>;
 
   // Parse + validate body.
   let rawBody: unknown;
@@ -131,7 +129,6 @@ export async function PATCH(
   const input = parsed.data;
 
   // Verify the source exists and belongs to the org (user-scoped client for RLS check).
-  const supabase = await createClient();
   const { data: existing, error: fetchErr } = await supabase
     .from("ai_knowledge_sources")
     .select("id, source_type, agent_id")
@@ -247,7 +244,7 @@ export async function PATCH(
 // ---------------------------------------------------------------------------
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -256,12 +253,11 @@ export async function DELETE(
   const requestId = randomUUID();
   const { id: sourceId } = await params;
 
-  const ctx = await resolveContext(requestId);
+  const ctx = await resolveContext(req, requestId);
   if (ctx.error) return ctx.error;
-  const { activeOrg } = ctx as Exclude<typeof ctx, { error: Response }>;
+  const { activeOrg, supabase } = ctx as Exclude<typeof ctx, { error: Response }>;
 
   // Verify ownership with user-scoped client.
-  const supabase = await createClient();
   const { data: existing, error: fetchErr } = await supabase
     .from("ai_knowledge_sources")
     .select("id")

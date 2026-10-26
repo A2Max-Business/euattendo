@@ -1,51 +1,16 @@
 /** External administrative capabilities. Never export through tools/index or the agent catalog. */
-import { NextRequest } from "next/server";
 import { z } from "zod";
-import { withMcpAdminIdentity } from "@/lib/api/mcp-admin-context";
 import {
   agentMcpCreateSchema, agentMcpPatchSchema, versionCreateSchema, versionPatchSchema,
   publishSchema, testRunSchema,
 } from "@/lib/ai/agents/validation";
 import { TOOL_CATALOG } from "@/lib/mcp/tools/catalog";
-import { McpAuthError, ensureRole, ensureScope, type McpAuthResult } from "../auth";
-import type { McpContext, McpToolDefinition } from "../types";
+import { McpAuthError, type McpAuthResult } from "../auth";
+import type { McpToolDefinition } from "../types";
 
-export type AdminTool = Omit<McpToolDefinition, "requiresScope"> & {
-  requiresScope: "config:read" | "config:write";
-};
-type Handler = (request: NextRequest) => Promise<Response>;
+import { delegate, type AdminTool } from "./delegate";
+import { createConfigurationTools } from "./configuration-tools";
 const uuid = z.string().uuid();
-
-async function delegate(
-  auth: McpAuthResult, ctx: McpContext, method: "GET" | "POST" | "PATCH",
-  path: string, handler: Handler, body?: unknown,
-): Promise<unknown> {
-  if (auth.actor.type !== "api_token" || ctx.contatoDoTurno ||
-      ctx.organizationId !== auth.organizationId || ctx.apiTokenId !== auth.apiTokenId)
-    throw new McpAuthError(-32002, 403, "Administração disponível apenas à integração externa.");
-  ensureRole(auth.role, "admin");
-  ensureScope(auth.scopes, method === "GET" ? "config:read" : "config:write");
-  // No network, cookies, Authorization or caller-selected destination. Only this
-  // freshly constructed Request receives the process-local identity.
-  const request = new NextRequest(`https://mcp.internal.invalid${path}`, {
-    method, ...(body === undefined ? {} : {
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    }),
-  });
-  return withMcpAdminIdentity(request, {
-    organizationId: auth.organizationId, actor: auth.actor, role: auth.role,
-    apiTokenId: auth.apiTokenId, scopes: auth.scopes,
-  }, async () => {
-    const response = await handler(request);
-    const payload = await response.json();
-    if (!response.ok) {
-      const error = payload as { error?: { code?: string; message?: string } };
-      throw new McpAuthError(-32002, response.status,
-        `${error.error?.code ?? "config_error"}: ${error.error?.message ?? "Operação recusada."}`);
-    }
-    return payload;
-  });
-}
 
 /** Called only by server.ts, with identity already validated for this HTTP MCP request. */
 export function createAdminTools(auth: McpAuthResult): AdminTool[] {
@@ -64,6 +29,7 @@ export function createAdminTools(auth: McpAuthResult): AdminTool[] {
     };
   }
   const definitions: AdminTool[] = [
+    ...createConfigurationTools(auth),
     tool("crm_admin_list_agents", "Lista os agentes da empresa para configuração administrativa; não ativa atendimento.",
       { include_archived: z.boolean().optional() }, "read", async (input, ctx) => {
         const { GET } = await import("@/app/api/v1/ai/agents/route");
@@ -153,8 +119,8 @@ export function createAdminTools(auth: McpAuthResult): AdminTool[] {
           tools: TOOL_CATALOG.map(t => ({ id: t.name, description: t.explicacao, risk: t.risco })) };
       }),
   ];
-  const legacyRead = new Set(["crm_admin_list_agents", "crm_admin_list_agent_versions"]);
-  const legacyWrite = new Set(["crm_admin_create_agent", "crm_admin_create_agent_version"]);
+  const legacyRead = new Set(["crm_admin_list_agents", "crm_admin_list_agent_versions", "crm_admin_list_followup_flows"]);
+  const legacyWrite = new Set(["crm_admin_create_agent", "crm_admin_create_agent_version", "crm_admin_create_followup_flow"]);
   return definitions.filter(definition => auth.scopes.includes(definition.requiresScope)
     && (!legacyRead.has(definition.name) || auth.scopes.includes("mcp:read"))
     && (!legacyWrite.has(definition.name) || auth.scopes.includes("mcp:write")));

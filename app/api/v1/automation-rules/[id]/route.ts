@@ -8,7 +8,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail, noContent } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import {
   MENSAGEM_CAMPO_DE_DATA_DO_CONTATO,
   campoDoGatilhoDeDataEhDoContato,
@@ -16,9 +16,9 @@ import {
 import { autoriaDaMudanca } from "@/lib/operacao/autoria";
 import { updateAutomationRuleSchema } from "@/lib/schemas";
 import { acoesQueFechamLaco, MENSAGEM_DO_LACO_DE_LEAD } from "@/lib/schemas/webhooks";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptRuleActionSecrets } from "@/lib/webhooks/secrets";
+import { preserveWebhookSecrets } from "@/lib/mcp/admin/webhook-secrets";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
@@ -33,10 +33,10 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
 
   const requestId = randomUUID();
   const { id } = await ctx.params;
-  const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "automation_rules" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+
 
   let raw: unknown = {};
   try {
@@ -52,12 +52,12 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     });
   }
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
   const { data: existing, error: fetchErr } = await supabase
     .from("automation_rules")
     .select("id, trigger_event, trigger_config, actions")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
   if (!existing) return fail("not_found", t("Regra não encontrada."), 404, { requestId });
@@ -82,7 +82,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       .from("webhook_sources")
       .select("id")
       .eq("id", webhookSourceId)
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .maybeSingle();
     if (sourceError) return fail("internal_error", sourceError.message, 500, { requestId });
     if (!source) {
@@ -100,7 +100,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   ) {
     const campoDeData = await campoDoGatilhoDeDataEhDoContato(
       supabase,
-      activeOrg.orgId,
+      authz.organizationId,
       parsed.data.trigger_event ?? gravada.trigger_event,
       parsed.data.trigger_config ?? (existing as { trigger_config: unknown }).trigger_config,
     );
@@ -118,10 +118,18 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   const patch: Record<string, unknown> = {
     ...parsed.data,
     updated_at: new Date().toISOString(),
-    ...autoriaDaMudanca({ type: "user", id: user.id, role: activeOrg.role }),
+    ...autoriaDaMudanca(authz.actor),
   };
   if (parsed.data.actions !== undefined) {
-    const safeActions = await encryptRuleActionSecrets(createAdminClient(), parsed.data.actions);
+    let actions = parsed.data.actions;
+    if (authz.via === "token") {
+      try {
+        actions = preserveWebhookSecrets(actions, existing.actions ?? []) as typeof actions;
+      } catch (error) {
+        return fail("validation_failed", error instanceof Error ? error.message : "Configuração inválida.", 422, { requestId });
+      }
+    }
+    const safeActions = await encryptRuleActionSecrets(createAdminClient(), actions);
     if (safeActions === null) {
       return fail(
         "encryption_unavailable",
@@ -137,6 +145,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
     .from("automation_rules")
     .update(patch)
     .eq("id", id)
+    .eq("organization_id", authz.organizationId)
     .select("*")
     .single();
   if (updErr) return fail("internal_error", updErr.message, 500, { requestId });
@@ -144,8 +153,9 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   const { actions: _actionsWithSecrets, ...auditableRule } = parsed.data;
   void audit({
     action: "automation.rule_updated",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "automation_rule",
     resourceId: id,
     requestId,
@@ -156,34 +166,35 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   return ok(updated, { requestId });
 }
 
-export async function DELETE(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
   const { id } = await ctx.params;
-  const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "automation_rules" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
 
-  const supabase = await createClient();
+
+  const supabase = await authz.getClient();
   const { data: existing, error: fetchErr } = await supabase
     .from("automation_rules")
     .select("id")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
   if (!existing) return fail("not_found", t("Regra não encontrada."), 404, { requestId });
 
-  const { error: delErr } = await supabase.from("automation_rules").delete().eq("id", id);
+  const { error: delErr } = await supabase.from("automation_rules").delete().eq("id", id).eq("organization_id", authz.organizationId);
   if (delErr) return fail("internal_error", delErr.message, 500, { requestId });
 
   void audit({
     action: "automation.rule_deleted",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "automation_rule",
     resourceId: id,
     requestId,

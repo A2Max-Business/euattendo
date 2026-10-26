@@ -25,7 +25,7 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { inviteMemberSchema, validateRequest } from "@/lib/schemas";
 
@@ -50,9 +50,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  const authz = await resolveConfigurationAuth(req, "admin", { requestId, resource: "team" });
   if (!authz.ok) return authz.response;
-  const { user: authUser, org: activeOrg } = authz;
+  if (!authz.ownerUserId) return fail("forbidden", "A integração não possui responsável identificado.", 403, { requestId });
+  let orgName = authz.organizationName;
+  if (authz.via === "token") {
+    const { data, error } = await (await authz.getClient()).from("organizations").select("display_name, legal_name").eq("id", authz.organizationId).single();
+    if (error || !data) return fail("internal_error", "Não foi possível consultar a empresa.", 500, { requestId });
+    orgName = data.display_name || data.legal_name || "Empresa";
+  }
 
   let input;
   try {
@@ -71,7 +77,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const failed: FailedItem[] = [];
 
   const admin = isServiceRoleConfigured() ? createAdminClient() : null;
-  const inviterName = authUser.full_name ?? authUser.email ?? "Um colega";
+  const inviterName = authz.displayName;
   // Emails com membership ATIVA na org — para pular o reconvite de quem já é membro.
   // O schema `auth` NÃO é acessível via PostgREST (erro "Invalid schema: auth"), então
   // resolvemos email↔usuário pela GoTrue admin API (getUserById) — mesmo padrão de
@@ -81,7 +87,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const { data: members } = await admin
       .from("user_organizations")
       .select("user_id, provisional_until_handover")
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .is("revoked_at", null);
 
     // Plano cheio: RECUSA antes do e-mail (spec cobrança §5, D-10; decisão do
@@ -92,16 +98,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     const ativos = (members ?? []).filter((m) => !m.provisional_until_handover).length;
     let limite: number | null = null;
     try {
-      limite = await lerLimiteDoPlano(admin, activeOrg.orgId, "assentos");
+      limite = await lerLimiteDoPlano(admin, authz.organizationId, "assentos");
     } catch (err) {
       logger.warn("team.invite: limite do plano não pôde ser lido — o convite segue", {
-        organization_id: activeOrg.orgId,
+        organization_id: authz.organizationId,
         request_id: requestId,
         causa: err instanceof Error ? err.message : String(err),
       });
     }
     if (limite !== null && ativos >= limite) {
-      return fail("plan_limit_reached", mensagemDoLimite("assentos", limite, authUser.idioma), 409, {
+      return fail("plan_limit_reached", mensagemDoLimite("assentos", limite, authz.idioma), 409, {
         requestId,
         details: { recurso: "assentos", limite },
       });
@@ -128,9 +134,10 @@ export async function POST(req: NextRequest): Promise<Response> {
         email,
         role: inv.role,
         interfaceSettings: inv.interface_settings,
-        organizationId: activeOrg.orgId,
-        orgName: activeOrg.name,
-        inviterId: authUser.id,
+        organizationId: authz.organizationId,
+        orgName: orgName,
+        inviterId: authz.ownerUserId,
+        actorApiTokenId: authz.apiTokenId ?? undefined,
         inviterName,
         requestId,
       });
@@ -148,9 +155,10 @@ export async function POST(req: NextRequest): Promise<Response> {
           email,
           role: inv.role,
           interfaceSettings: inv.interface_settings,
-          organizationId: activeOrg.orgId,
-          orgName: activeOrg.name,
-          inviterId: authUser.id,
+          organizationId: authz.organizationId,
+          orgName: orgName,
+          inviterId: authz.ownerUserId,
+        actorApiTokenId: authz.apiTokenId ?? undefined,
           inviterName,
           requestId,
         }),

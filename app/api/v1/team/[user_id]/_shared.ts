@@ -15,10 +15,9 @@ import type { NextRequest } from "next/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { ApiError } from "@/lib/api/types";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { changeRoleSchema, validateRequest } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
 
 export async function changeMemberRole(
   req: NextRequest,
@@ -27,10 +26,10 @@ export async function changeMemberRole(
   const requestId = randomUUID();
   const { user_id: targetUserId } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  const authz = await resolveConfigurationAuth(req, "admin", { requestId, resource: "team" });
   if (!authz.ok) return authz.response;
-  const { user: authUser, org: activeOrg } = authz;
-  const t = (texto: string) => traduzir(texto, authUser.idioma);
+
+  const t = (texto: string) => traduzir(texto, authz.idioma);
 
   let input;
   try {
@@ -45,12 +44,12 @@ export async function changeMemberRole(
     throw err;
   }
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
 
   const { data: target, error: fetchErr } = await supabase
     .from("user_organizations")
     .select("id, user_id, role, revoked_at")
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("user_id", targetUserId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
@@ -63,7 +62,7 @@ export async function changeMemberRole(
     const { count, error: countErr } = await supabase
       .from("user_organizations")
       .select("id", { count: "exact", head: true })
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .eq("role", "admin")
       .is("revoked_at", null);
     if (countErr) return fail("internal_error", countErr.message, 500, { requestId });
@@ -80,13 +79,14 @@ export async function changeMemberRole(
   const { error: updErr } = await supabase
     .from("user_organizations")
     .update({ role: input.role, updated_at: new Date().toISOString() })
-    .eq("id", target.id);
+    .eq("id", target.id).eq("organization_id", authz.organizationId);
   if (updErr) return fail("internal_error", updErr.message, 500, { requestId });
 
   await audit({
     action: "team.role_changed",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "membership",
     resourceId: target.id,
     requestId,

@@ -13,7 +13,7 @@
  * O controle (mensagem só comercial → passagem comercial) é o que impede o
  * verde por ausência: prova que a restrição está LIGADA neste harness.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PublishedAgentConfig } from '@/lib/agent-engine/agent/agent-config';
 
 const mocks = vi.hoisted(() => ({
@@ -115,6 +115,10 @@ const passagemComercial = () =>
   mocks.passagem.mock.calls.filter((c) => String((c[2] as { inboxTitle?: string })?.inboxTitle ?? '').startsWith('Valores e negociação'));
 
 beforeEach(() => {
+  // O opt-out é o objeto do teste; mantenha a janela comercial aberta
+  // independentemente da hora e do dia em que o CI executa a suíte.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-23T15:00:00Z'));
   vi.clearAllMocks();
   mocks.router.mockResolvedValue(null);
   mocks.agente.mockResolvedValue(assistido);
@@ -123,6 +127,8 @@ beforeEach(() => {
   mocks.avisoLendo.mockResolvedValue({ avisado: true });
   mocks.passagem.mockResolvedValue(undefined);
 });
+
+afterEach(() => vi.useRealTimers());
 
 describe('restrição comercial cede ao opt-out e ao pedido de humano', () => {
   it('mensagem mista com opt-out: o opt-out é registrado e o cliente NÃO recebe o aviso comercial', async () => {

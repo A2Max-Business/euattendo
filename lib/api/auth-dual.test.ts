@@ -23,6 +23,7 @@ import type { AuthUser } from "@/lib/auth/types";
 import { McpAuthError } from "@/lib/mcp/auth";
 
 import { resolveAuthDual } from "./auth-dual";
+import { withMcpAdminIdentity, type McpAdminIdentity } from "./mcp-admin-context";
 
 vi.mock("@/lib/auth/require-role", () => ({ requireRole: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn(async () => ({ session: true })) }));
@@ -232,5 +233,31 @@ describe("os caminhos de envio passam pelo proxy", () => {
     // A entrada de mídia é ancorada: não libera irmãs como /notes ou /claim.
     expect(isPublicPath("/api/v1/conversations/abc-123/notes")).toBe(false);
     expect(isPublicPath("/api/v1/conversations/abc-123/media/extra")).toBe(false);
+  });
+});
+
+
+describe("delegação administrativa MCP sem credenciais intermediárias", () => {
+  const identity: McpAdminIdentity = {
+    organizationId: ORG_DO_TOKEN, role: "admin", apiTokenId: USER_ID,
+    actor: { type: "api_token", id: USER_ID, role: "admin" }, scopes: ["config:read"],
+  };
+  const options = { ...OPCOES, scope: "config:read", role: "admin" as const };
+  it("usa a organização autenticada, sem consultar sessão ou bearer", async () => {
+    const request = req();
+    const result = await withMcpAdminIdentity(request, identity, () => resolveAuthDual(request, options));
+    expect(result).toMatchObject({ ok: true, organizationId: ORG_DO_TOKEN, via: "token", apiTokenId: USER_ID });
+    expect(requireRole).not.toHaveBeenCalled();
+    expect(validateBearerToken).not.toHaveBeenCalled();
+  });
+  it.each([
+    { ...identity, role: "manager" as const },
+    { ...identity, scopes: ["mcp:write"] },
+    { ...identity, actor: { type: "ai_agent" as const, id: USER_ID, role: "admin" } },
+  ])("recusa identidade sem a autoridade administrativa exata", async bad => {
+    const request = req();
+    const result = await withMcpAdminIdentity(request, bad, () => resolveAuthDual(request, options));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.response.status).toBe(403);
   });
 });

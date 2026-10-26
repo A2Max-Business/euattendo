@@ -28,7 +28,7 @@ export class ChannelConnectionError extends Error {
 type Transport = Pick<WahaClient, "createSession" | "startExistingSession" | "stopSession">
   & Partial<Pick<WahaClient, "definirRecebimentoDeGrupos">>;
 export interface ConnectChannelInput {
-  organizationId: string; idempotencyKey: string; userId: string; requestId: string;
+  organizationId: string; idempotencyKey: string; userId: string | null; apiTokenId?: string | null; requestId: string;
   displayName?: string; onboarding?: boolean; restart?: boolean;
 }
 
@@ -120,7 +120,7 @@ export async function connectWahaChannel(authDb: SupabaseClient, serviceDb: Supa
       waha.definirRecebimentoDeGrupos ? (ref, receber) => waha.definirRecebimentoDeGrupos!(ref, receber) : undefined,
       { organizationId: input.organizationId, channelSessionId: channel.id, sessionRef: channel.waha_session_name },
     );
-    void audit({ action: channel.archived_at ? "channel.reactivated" : "channel.connected", actorUserId: input.userId,
+    void audit({ action: channel.archived_at ? "channel.reactivated" : "channel.connected", actorUserId: input.userId, actorApiTokenId: input.apiTokenId,
       organizationId: input.organizationId, resourceType: "channel_session", resourceId: channel.id,
       requestId: input.requestId, metadata: { provider: "waha", origin: input.onboarding ? "onboarding" : "connections" } });
     return { channel: persisted, replay: false };

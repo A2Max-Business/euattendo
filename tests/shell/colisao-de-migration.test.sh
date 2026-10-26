@@ -50,6 +50,11 @@
 #  30. mais de 30 PRs abertos: o gate pede --limit, senão o gh corta calado em 30.
 set -uo pipefail
 
+# Every case below uses disposable repositories and synthetic PR numbers.
+# The real CI PR may have the same number (for example #8), which would make
+# the gate exclude that fixture as its own PR instead of measuring it.
+unset GITHUB_REF
+
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 GATE_ORIGEM="$RAIZ/scripts/checar-colisao-de-migration.sh"
 

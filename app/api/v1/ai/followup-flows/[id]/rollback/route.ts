@@ -17,8 +17,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { rollbackFollowupFlowSchema } from "@/lib/followup/api-schemas";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -38,10 +37,10 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     return fail("invalid_request", "id inválido.", 400, { requestId });
   }
 
-  const authz = await requireRole("manager", { requestId, resource: "followup_flows" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "followup_flows" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+
 
   let raw: unknown;
   try {
@@ -58,12 +57,12 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     });
   }
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
   const { data: pointer, error: fetchErr } = await supabase
     .from("followup_flow_pointers")
     .select("id")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
   if (!pointer) return fail("not_found", t("Fluxo não encontrado."), 404, { requestId });
@@ -72,7 +71,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
     .from("followup_flow_versions")
     .select("id")
     .eq("id", parsed.data.version_id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("pointer_id", id)
     .maybeSingle();
   if (versionErr) return fail("internal_error", versionErr.message, 500, { requestId });
@@ -85,7 +84,7 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .select("id, status, active_version_id, updated_at")
     .single();
   if (updErr || !updated) {
@@ -96,8 +95,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
 
   void audit({
     action: "followup_flow.rolled_back",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "followup_flow_pointer",
     resourceId: id,
     requestId,

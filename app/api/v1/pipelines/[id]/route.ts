@@ -22,7 +22,7 @@ import { z } from "zod";
 
 import { fail, ok } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import {
   nomeOcupadoPorAtivo,
   podeExcluirDeVez,
@@ -33,7 +33,6 @@ import {
   validarNomeDeFunil,
   type FunilEditavel,
 } from "@/lib/pipelines/pipeline-editing";
-import { createClient } from "@/lib/supabase/server";
 
 import { conflitoDoBanco, corpo, lerDependencias, lerFunis } from "../_funis";
 import { traduzir } from "@/lib/i18n/dicionario";
@@ -93,10 +92,10 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_pipelines" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "crm_pipelines" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const orgId = authz.org.orgId;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+  const orgId = authz.organizationId;
 
   const { id: pipelineId } = await ctx.params;
 
@@ -116,7 +115,7 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
   }
   const pedido = parsed.data;
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
 
   let funis: FunilEditavel[];
   try {
@@ -298,7 +297,8 @@ export async function PATCH(req: NextRequest, ctx: RouteCtx): Promise<Response> 
       // que o DELETE emite: quem audita quer saber quem trouxe o funil de volta,
       // e `pipeline.updated` esconderia isso entre os renames.
       action: tiraDoArquivo ? "pipeline.unarchived" : "pipeline.updated",
-      actorUserId: authz.user.id,
+      actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
       organizationId: orgId,
       resourceType: "crm_pipeline",
       resourceId: pipelineId,
@@ -319,15 +319,15 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_pipelines" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "crm_pipelines" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const orgId = authz.org.orgId;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+  const orgId = authz.organizationId;
 
   const { id: pipelineId } = await ctx.params;
   const definitivo = req.nextUrl.searchParams.get("definitivo") === "1";
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
 
   let funis: FunilEditavel[];
   try {
@@ -384,7 +384,8 @@ export async function DELETE(req: NextRequest, ctx: RouteCtx): Promise<Response>
 
   void audit({
     action: definitivo ? "pipeline.deleted" : "pipeline.archived",
-    actorUserId: authz.user.id,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
     organizationId: orgId,
     resourceType: "crm_pipeline",
     resourceId: pipelineId,

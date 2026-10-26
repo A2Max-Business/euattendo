@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { audit } from "@/lib/audit";
 import { fail, ok } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -21,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const auth = await requireRole("admin", {
+  const auth = await resolveConfigurationAuth(req, "admin", {
     requestId,
     resource: "channel_sessions",
     allowPlatformAdmin: true,
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
   const { data: before, error: readError } = await db
     .from("channel_sessions")
     .select("display_name")
-    .eq("organization_id", auth.org.orgId)
+    .eq("organization_id", auth.organizationId)
     .eq("id", id)
     .is("archived_at", null)
     .maybeSingle();
@@ -56,7 +56,7 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
   const { data, error } = await db
     .from("channel_sessions")
     .update({ display_name: displayName })
-    .eq("organization_id", auth.org.orgId)
+    .eq("organization_id", auth.organizationId)
     .eq("id", id)
     .is("archived_at", null)
     .select("id, display_name")
@@ -69,8 +69,9 @@ export async function PATCH(req: NextRequest, { params }: Context): Promise<Resp
 
   void audit({
     action: "channel.renamed",
-    actorUserId: auth.user.id,
-    organizationId: auth.org.orgId,
+    actorUserId: auth.actorUserId,
+    actorApiTokenId: auth.apiTokenId,
+    organizationId: auth.organizationId,
     resourceType: "channel_session",
     resourceId: id,
     requestId,

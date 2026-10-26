@@ -13,8 +13,7 @@ import { randomUUID } from "node:crypto";
 import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import {
   conviteEstaEmAberto,
   linkDeAceite,
@@ -24,19 +23,19 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "team" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "team" });
   if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
 
-  const supabase = await createClient();
+
+  const supabase = await authz.getClient();
   const { data: rows, error } = await supabase
     .from("team_invites")
     .select(
       "id, organization_id, email, role, interface_settings, invited_by, inviter_name, email_dispatched, created_at, last_sent_at, resend_count, expires_at, accepted_at, revoked_at",
     )
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .order("created_at", { ascending: false });
 
   if (error) return fail("internal_error", error.message, 500, { requestId });

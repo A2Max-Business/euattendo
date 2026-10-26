@@ -16,7 +16,7 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { carregaEtapasCitadas } from "@/lib/followup/etapas-citadas";
 import { carregaModelosCitados } from "@/lib/followup/modelos-citados";
@@ -38,7 +38,7 @@ const UUID_RX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 type RouteCtx = { params: Promise<{ id: string }> };
 
-export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> {
+export async function POST(req: NextRequest, ctx: RouteCtx): Promise<Response> {
   const supportDenied = await requireSupportWrite();
   if (supportDenied) return supportDenied;
 
@@ -48,17 +48,17 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
     return fail("invalid_request", "id inválido.", 400, { requestId });
   }
 
-  const authz = await requireRole("manager", { requestId, resource: "followup_flows" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "followup_flows" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+
 
   const admin = createAdminClient();
   const { data: pointer, error: fetchErr } = await admin
     .from("followup_flow_pointers")
     .select("id, draft_graph, trigger_config, surface")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
   if (!pointer) return fail("not_found", t("Fluxo não encontrado."), 404, { requestId });
@@ -133,7 +133,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
       .from("crm_stages")
       .select("id, name, is_archived")
       .eq("id", stageId)
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .maybeSingle();
     if (stageErr) return fail("internal_error", stageErr.message, 500, { requestId });
     if (!stage) {
@@ -172,11 +172,11 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
   const graph = pointer.draft_graph as unknown as FlowGraph;
   // A regra de etapa guarda o `stage_id`, e só o banco diz se a etapa existe e
   // está ativa — sem esta leitura, uma regra que nunca decide publicaria calada.
-  const citadas = await carregaEtapasCitadas(admin, activeOrg.orgId, graph.nodes);
+  const citadas = await carregaEtapasCitadas(admin, authz.organizationId, graph.nodes);
   if (!citadas.ok) return fail("internal_error", citadas.mensagem, 500, { requestId });
   // O motor lança a cada envio quando o modelo do passo não existe NESTA org
   // (fluxo importado de outra conta, ou modelo apagado) — seguimento do #3056.
-  const modelos = await carregaModelosCitados(admin, activeOrg.orgId, graph.nodes);
+  const modelos = await carregaModelosCitados(admin, authz.organizationId, graph.nodes);
   if (!modelos.ok) return fail("internal_error", modelos.mensagem, 500, { requestId });
   // Roteiro: para onde os OUTROS roteiros ativos encadeiam — para recusar a
   // publicação que fecharia um ciclo A → B → A (revisão do #1573).
@@ -185,7 +185,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
     const { data: ativos, error: ativosErr } = await admin
       .from("followup_flow_pointers")
       .select("id, name, active_version_id")
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .eq("surface", "atendimento")
       .eq("status", "active")
       .neq("id", id);
@@ -196,7 +196,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
       const { data: vs, error: vsErr } = await admin
         .from("followup_flow_versions")
         .select("id, graph")
-        .eq("organization_id", activeOrg.orgId)
+        .eq("organization_id", authz.organizationId)
         .in("id", versoes);
       if (vsErr) return fail("internal_error", vsErr.message, 500, { requestId });
       for (const v of vs ?? []) grafos.set(v.id as string, v.graph);
@@ -220,7 +220,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
   const { data: conexoes, error: conexoesErr } = await admin
     .from("channel_sessions")
     .select("provider")
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .is("archived_at", null);
   if (conexoesErr) return fail("internal_error", conexoesErr.message, 500, { requestId });
   const exigeModeloForaDaJanela = algumCanalExigeModeloForaDaJanela(
@@ -247,10 +247,10 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
   }
 
   const result = await publishFollowupFlowVersion(admin, {
-    orgId: activeOrg.orgId,
+    orgId: authz.organizationId,
     pointerId: id,
     graph,
-    createdBy: user.id,
+    createdBy: authz.actorUserId,
   });
   if (!result.ok) {
     if (result.code === "pointer_not_found") {
@@ -263,7 +263,7 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
     .from("followup_flow_pointers")
     .select("id, status, active_version_id, updated_at")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .single();
   if (reloadErr || !updatedPointer) {
     return fail("internal_error", reloadErr?.message ?? "followup_flow_reload_failed", 500, {
@@ -273,8 +273,9 @@ export async function POST(_req: NextRequest, ctx: RouteCtx): Promise<Response> 
 
   void audit({
     action: "followup_flow.published",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "followup_flow_pointer",
     resourceId: id,
     requestId,

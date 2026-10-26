@@ -16,8 +16,7 @@ import { randomUUID } from "node:crypto";
 import { type NextRequest } from "next/server";
 import { z } from "zod";
 import { ok, fail } from "@/lib/api/wrappers";
-import { requireRole } from "@/lib/auth/require-role";
-import { createClient } from "@/lib/supabase/server";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { traduzir } from "@/lib/i18n/dicionario";
 
@@ -40,10 +39,10 @@ export async function POST(
   const requestId = randomUUID();
   const { id } = await params;
 
-  const authz = await requireRole("manager", { requestId, resource: "ai_knowledge" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "ai_knowledge" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+
 
   // Body é opcional; se vier, valida.
   if (req.headers.get("content-length") && req.headers.get("content-length") !== "0") {
@@ -65,12 +64,12 @@ export async function POST(
   }
 
   // Valida ownership via cliente user-scoped (RLS).
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
   const { data: existing, error: fetchErr } = await supabase
     .from("ai_knowledge_sources")
     .select("id, agent_id, source_type")
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .maybeSingle();
 
   if (fetchErr) {
@@ -91,7 +90,7 @@ export async function POST(
     .from("ai_knowledge_sources")
     .update({ last_index_error: null })
     .eq("id", id)
-    .eq("organization_id", activeOrg.orgId);
+    .eq("organization_id", authz.organizationId);
 
   if (clearErr) {
     console.warn("[ai-knowledge-reindex] clear last_index_error failed (non-blocking):", clearErr.message);
@@ -108,7 +107,7 @@ export async function POST(
       source_type: ksRow.source_type,
       triggered_by: "manual_reindex",
     },
-    p_organization_id: activeOrg.orgId,
+    p_organization_id: authz.organizationId,
   } as never);
 
   if (emitErr) {

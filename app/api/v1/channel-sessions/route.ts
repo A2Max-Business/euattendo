@@ -1,3 +1,5 @@
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
+import { getMcpAdminIdentity } from "@/lib/api/mcp-admin-context";
 import { requireSupportWrite } from "@/lib/impersonate/support";
 /**
  * GET  /api/v1/channel-sessions — lista os canais WhatsApp da org (do DB).
@@ -15,7 +17,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { mfaEmDivida } from "@/lib/auth/server";
 import { ok, fail } from "@/lib/api/wrappers";
 import { loadAuthUser } from "@/lib/auth/server";
-import { orgAtivaDaApi, requireRole } from "@/lib/auth/require-role";
+import { orgAtivaDaApi } from "@/lib/auth/require-role";
 import { ARCHIVED_AT, queryTolerantToMissingArchived } from "@/lib/channels/archived";
 import { PROVIDERS_DE_MENSAGEM } from "@/lib/channels/capabilities";
 import { createChannelSchema } from "@/lib/schemas/channels";
@@ -29,8 +31,16 @@ export const dynamic = "force-dynamic";
 export const CHANNEL_COLUMNS =
   "id, provider, waha_session_name, display_name, phone_number, status, status_reason, last_health_check_at, last_status_change_at, daily_message_limit, is_warmup_complete, created_at, metadata";
 
-export async function GET(): Promise<Response> {
+export async function GET(req?: NextRequest): Promise<Response> {
   const requestId = randomUUID();
+  let supabase;
+  let organizationId: string;
+  if (req && getMcpAdminIdentity(req)) {
+    const auth = await resolveConfigurationAuth(req, "admin", { requestId, resource: "channel_sessions" });
+    if (!auth.ok) return auth.response;
+    supabase = await auth.getClient();
+    organizationId = auth.organizationId;
+  } else {
   const user = await loadAuthUser();
   if (!user) return fail("unauthenticated", "Auth required.", 401, { requestId });
   const ativa = await orgAtivaDaApi(user, requestId);
@@ -38,12 +48,14 @@ export async function GET(): Promise<Response> {
   const activeOrg = ativa.org;
   if (!activeOrg) return fail("forbidden_tenant", "Nenhuma organização ativa.", 403, { requestId });
 
-  const supabase = await createClient();
+  supabase = await createClient();
+  organizationId = activeOrg.orgId;
+  }
   const base = () =>
     supabase
       .from("channel_sessions")
       .select(CHANNEL_COLUMNS)
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", organizationId)
       // Só canal de MENSAGEM. A linha de chamada de voz (spec 18) mora na mesma
       // tabela, tem card próprio em Conexões e não tem `waha_session_name` nem
       // telefone: entrando aqui, ela vira um número a mais no seletor do inbox e
@@ -86,15 +98,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("admin", {
+  const authz = await resolveConfigurationAuth(req, "admin", {
     requestId,
     resource: "channel_sessions",
     allowPlatformAdmin: true,
   });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
-  if (await mfaEmDivida()) return fail("mfa_required", t("Confirme a verificação em duas etapas."), 403, { requestId });
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+
+  if (authz.via === "session" && await mfaEmDivida()) return fail("mfa_required", t("Confirme a verificação em duas etapas."), 403, { requestId });
 
   const waha = getWahaClient();
   if (!waha) {
@@ -121,13 +133,13 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   try {
-    const result = await connectWahaChannel(await createClient(), createAdminClient(), waha, {
-      organizationId: activeOrg.orgId, idempotencyKey: req.headers.get("Idempotency-Key") ?? "",
-      userId: user.id, requestId, displayName: parsed.data.display_name,
+    const result = await connectWahaChannel(await authz.getClient(), createAdminClient(), waha, {
+      organizationId: authz.organizationId, idempotencyKey: req.headers.get("Idempotency-Key") ?? "",
+      userId: authz.actorUserId, apiTokenId: authz.apiTokenId, requestId, displayName: parsed.data.display_name,
     });
     return ok(result.channel, { requestId, status: result.replay ? 200 : 201 });
   } catch (error) {
-    const limite = traduzirLimiteDoPlano(error, authz.user.idioma);
+    const limite = traduzirLimiteDoPlano(error, authz.idioma);
     if (limite) return fail(limite.code, limite.message, 409, { requestId, details: limite.details });
     if (error instanceof ChannelConnectionError) return fail(error.code,
       error.code === "connection_in_progress" ? t("A conexão ainda está sendo preparada. Aguarde e tente novamente.")

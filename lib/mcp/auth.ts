@@ -14,6 +14,7 @@
  *   `mcp:write`        -> habilita write tools (S-13.04)
  */
 import { createHash } from "node:crypto";
+import { conferirAudiencia } from "./oauth/contrato";
 
 import type { Actor } from "@/lib/api/handlers/types";
 import { registrarFalhaDeToken, tokenFailureLimited } from "@/lib/auth/rate-limit";
@@ -23,6 +24,8 @@ import { ehOperante } from "@/lib/organizacao/operante";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export interface McpAuthResult {
+  /** Token provisioner, resolved from the token record; never a caller-selected user. */
+  ownerUserId?: string;
   organizationId: string;
   role: Role;
   actor: Actor;
@@ -39,6 +42,8 @@ export interface McpAuthResult {
 
 /** Opção de quem valida o token: aceitar o da empresa suspensa, marcado. */
 export interface OpcoesDoToken {
+  /** Audiência explícita: somente o ingresso MCP a informa. */
+  resource?: string;
   permiteOrgSuspensa?: boolean;
 }
 
@@ -113,7 +118,7 @@ export function extractBearer(authHeader: string | null): string | null {
 /** Por que um `dsk_...` não validou — neutro, sem código MCP nem HTTP status. */
 export class ApiTokenError extends Error {
   constructor(
-    public readonly reason: "malformed" | "not_found" | "revoked" | "expired" | "lookup_failed" | "org_suspended",
+    public readonly reason: "malformed" | "not_found" | "revoked" | "expired" | "lookup_failed" | "org_suspended" | "invalid_audience",
     message: string,
   ) {
     super(message);
@@ -170,6 +175,9 @@ export async function resolveApiToken(
   }
   if (!data) {
     throw new ApiTokenError("not_found", "Token not recognized.");
+  }
+  if (!conferirAudiencia(parseScopes(data.scopes), opcoes.resource)) {
+    throw new ApiTokenError("invalid_audience", "Token is not valid for this resource.");
   }
   if (data.revoked_at) {
     throw new ApiTokenError("revoked", "Token revoked.");
@@ -264,6 +272,7 @@ export async function validateBearerToken(
 
   return {
     organizationId: resolved.organizationId,
+    ownerUserId: resolved.createdBy,
     role,
     actor,
     apiTokenId: resolved.id,

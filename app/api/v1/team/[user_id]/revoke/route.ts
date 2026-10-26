@@ -13,17 +13,16 @@ import type { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import { logger } from "@/lib/logger";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { traduzir } from "@/lib/i18n/dicionario";
 import { registrarTrocaDeComando } from "@/lib/inbox/atividade-de-comando";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ user_id: string }> },
 ): Promise<Response> {
   const supportDenied = await requireSupportWrite();
@@ -32,20 +31,20 @@ export async function POST(
   const requestId = randomUUID();
   const { user_id: targetUserId } = await ctx.params;
 
-  const authz = await requireRole("admin", { requestId, resource: "team" });
+  const authz = await resolveConfigurationAuth(req, "admin", { requestId, resource: "team" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user: authUser, org: activeOrg } = authz;
-  if (targetUserId === authUser.id) {
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+
+  if (targetUserId === authz.ownerUserId) {
     return fail("state_conflict", t("Não é possível revogar o próprio acesso."), 409, { requestId });
   }
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
 
   const { data: target, error: fetchErr } = await supabase
     .from("user_organizations")
     .select("id, user_id, role, revoked_at")
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("user_id", targetUserId)
     .maybeSingle();
   if (fetchErr) return fail("internal_error", fetchErr.message, 500, { requestId });
@@ -58,7 +57,7 @@ export async function POST(
     const { count, error: countErr } = await supabase
       .from("user_organizations")
       .select("id", { count: "exact", head: true })
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .eq("role", "admin")
       .is("revoked_at", null);
     if (countErr) return fail("internal_error", countErr.message, 500, { requestId });
@@ -77,7 +76,7 @@ export async function POST(
   const { data: openConvs } = await supabase
     .from("conversations")
     .select("id, contact_id")
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("assigned_to_user_id", targetUserId)
     .in("status", ["open", "pending", "claimed", "ai_handling"]);
 
@@ -85,7 +84,7 @@ export async function POST(
   const { error: updErr } = await supabase
     .from("user_organizations")
     .update({ revoked_at: nowIso, updated_at: nowIso })
-    .eq("id", target.id);
+    .eq("id", target.id).eq("organization_id", authz.organizationId);
   if (updErr) return fail("internal_error", updErr.message, 500, { requestId });
 
   // A inscrição é do membro, e a RLS de `push_subscriptions` só deixa cada um
@@ -94,7 +93,7 @@ export async function POST(
   const { count: pushRemovidos, error: pushErr } = await createAdminClient()
     .from("push_subscriptions")
     .delete({ count: "exact" })
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .eq("user_id", targetUserId);
   if (pushErr) {
     logger.warn("member_revoke_push_cleanup_failed", { detail: pushErr.message });
@@ -104,8 +103,9 @@ export async function POST(
     for (const conv of openConvs) {
       await audit({
         action: "conversation.released",
-        actorUserId: authUser.id,
-        organizationId: activeOrg.orgId,
+        actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+        organizationId: authz.organizationId,
         resourceType: "conversation",
         resourceId: conv.id,
         requestId,
@@ -114,11 +114,11 @@ export async function POST(
 
       await registrarTrocaDeComando({
         supabase,
-        organizationId: activeOrg.orgId,
+        organizationId: authz.organizationId,
         conversationId: conv.id,
         contactId: conv.contact_id,
         tipo: "conversation_released",
-        actor: { type: "user", id: authUser.id, role: authz.org.role },
+        actor: authz.actor,
         motivo: "Atendente revogado da organização",
       });
     }
@@ -126,8 +126,9 @@ export async function POST(
 
   await audit({
     action: "member.revoked",
-    actorUserId: authUser.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "membership",
     resourceId: target.id,
     requestId,

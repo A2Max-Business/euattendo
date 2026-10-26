@@ -5,34 +5,34 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  *   create (schema não tem o campo) — regra nasce pausada (default FALSE do banco).
  */
 import { randomUUID } from "node:crypto";
-import type { NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import {
   MENSAGEM_CAMPO_DE_DATA_DO_CONTATO,
   campoDoGatilhoDeDataEhDoContato,
 } from "@/lib/automation/campo-do-gatilho-de-data";
 import { createAutomationRuleSchema } from "@/lib/schemas";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptRuleActionSecrets } from "@/lib/webhooks/secrets";
+import { preserveWebhookSecrets } from "@/lib/mcp/admin/webhook-secrets";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+export async function GET(req: NextRequest = new NextRequest("http://local/")): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "automation_rules" });
   if (!authz.ok) return authz.response;
-  const { org: activeOrg } = authz;
 
-  const supabase = await createClient();
+
+  const supabase = await authz.getClient();
   const { data, error } = await supabase
     .from("automation_rules")
     .select("*")
-    .eq("organization_id", activeOrg.orgId)
+    .eq("organization_id", authz.organizationId)
     .order("created_at", { ascending: false });
   if (error) return fail("internal_error", error.message, 500, { requestId });
   return ok(data ?? [], { requestId });
@@ -43,10 +43,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "automation_rules" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "automation_rules" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const { user, org: activeOrg } = authz;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+
 
   let raw: unknown = {};
   try {
@@ -63,7 +63,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
 
   // Secrets de call_webhook nunca ficam em claro no jsonb (migration 0041).
-  const safeActions = await encryptRuleActionSecrets(createAdminClient(), parsed.data.actions);
+  let actions = parsed.data.actions;
+  if (authz.via === "token") {
+    try {
+      actions = preserveWebhookSecrets(actions, []) as typeof actions;
+    } catch (error) {
+      return fail("validation_failed", error instanceof Error ? error.message : "Configuração inválida.", 422, { requestId });
+    }
+  }
+  const safeActions = await encryptRuleActionSecrets(createAdminClient(), actions);
   if (safeActions === null) {
     return fail(
       "encryption_unavailable",
@@ -73,14 +81,14 @@ export async function POST(req: NextRequest): Promise<Response> {
     );
   }
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
   const webhookSourceId = parsed.data.trigger_config?.webhook_source_id;
   if (typeof webhookSourceId === "string") {
     const { data: source, error: sourceError } = await supabase
       .from("webhook_sources")
       .select("id")
       .eq("id", webhookSourceId)
-      .eq("organization_id", activeOrg.orgId)
+      .eq("organization_id", authz.organizationId)
       .maybeSingle();
     if (sourceError) return fail("internal_error", sourceError.message, 500, { requestId });
     if (!source) {
@@ -89,7 +97,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   }
   const campoDeData = await campoDoGatilhoDeDataEhDoContato(
     supabase,
-    activeOrg.orgId,
+    authz.organizationId,
     parsed.data.trigger_event,
     parsed.data.trigger_config,
   );
@@ -100,8 +108,8 @@ export async function POST(req: NextRequest): Promise<Response> {
   const { data: created, error: insErr } = await supabase
     .from("automation_rules")
     .insert({
-      organization_id: activeOrg.orgId,
-      created_by_user_id: user.id,
+      organization_id: authz.organizationId,
+      created_by_user_id: authz.actorUserId,
       name: parsed.data.name,
       trigger_event: parsed.data.trigger_event,
       conditions: parsed.data.conditions,
@@ -119,8 +127,9 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   void audit({
     action: "automation.rule_created",
-    actorUserId: user.id,
-    organizationId: activeOrg.orgId,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
+    organizationId: authz.organizationId,
     resourceType: "automation_rule",
     resourceId: created.id,
     requestId,

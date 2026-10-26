@@ -7,12 +7,12 @@ import { requireSupportWrite } from "@/lib/impersonate/support";
  * POST /api/v1/pipelines — cria um funil COM as etapas com que ele nasce.
  */
 import { randomUUID } from "node:crypto";
-import { type NextRequest } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
-import { requireRole } from "@/lib/auth/require-role";
+import { resolveConfigurationAuth } from "@/lib/api/configuration-auth";
 import {
   ETAPAS_INICIAIS,
   posicaoEntre,
@@ -20,24 +20,23 @@ import {
   validarNomeDeFunil,
   type FunilEditavel,
 } from "@/lib/pipelines/pipeline-editing";
-import { createClient } from "@/lib/supabase/server";
 import { conflitoDoBanco, corpo, lerFunis } from "./_funis";
 import { listPipelinesHandler } from "./_handler";
 import { traduzir } from "@/lib/i18n/dicionario";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(): Promise<Response> {
+export async function GET(req: NextRequest = new NextRequest("http://local/")): Promise<Response> {
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "pipelines" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "pipelines" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
+  const t = (texto: string) => traduzir(texto, authz.idioma);
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
   try {
     const { pipelines } = await listPipelinesHandler(supabase, {
-      organization_id: authz.org.orgId,
-      actor: { type: "user", id: authz.user.id },
+      organization_id: authz.organizationId,
+      actor: authz.actor,
       requestId,
     });
     return ok(pipelines, { requestId });
@@ -73,10 +72,10 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (supportDenied) return supportDenied;
 
   const requestId = randomUUID();
-  const authz = await requireRole("manager", { requestId, resource: "crm_pipelines" });
+  const authz = await resolveConfigurationAuth(req, "manager", { requestId, resource: "crm_pipelines" });
   if (!authz.ok) return authz.response;
-  const t = (texto: string) => traduzir(texto, authz.user.idioma);
-  const orgId = authz.org.orgId;
+  const t = (texto: string) => traduzir(texto, authz.idioma);
+  const orgId = authz.organizationId;
 
   let json: unknown;
   try {
@@ -95,7 +94,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const name = parsed.data.name.trim();
   const description = parsed.data.description?.trim() || null;
 
-  const supabase = await createClient();
+  const supabase = await authz.getClient();
 
   let funis: FunilEditavel[];
   try {
@@ -165,7 +164,8 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   void audit({
     action: "pipeline.created",
-    actorUserId: authz.user.id,
+    actorUserId: authz.actorUserId,
+    actorApiTokenId: authz.apiTokenId,
     organizationId: orgId,
     resourceType: "crm_pipeline",
     resourceId: pipelineId,

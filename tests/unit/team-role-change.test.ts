@@ -62,12 +62,21 @@ function makeSupabaseStub(state: StubState) {
           };
           return chain;
         },
-        update: (values: Record<string, unknown>) => ({
-          eq: () => {
-            state.updates.push(values);
-            return Promise.resolve({ error: null });
-          },
-        }),
+        update: (values: Record<string, unknown>) => {
+          const filters: Record<string, unknown> = {};
+          const chain = {
+            eq: (column: string, value: unknown) => {
+              filters[column] = value;
+              return chain;
+            },
+            then: (resolve: (result: { error: null }) => unknown) => {
+              expect(filters).toEqual({ id: MEMBERSHIP_ID, organization_id: ORG_ID });
+              state.updates.push(values);
+              return Promise.resolve({ error: null }).then(resolve);
+            },
+          };
+          return chain;
+        },
       };
     },
     rpc: async (fn: string) =>

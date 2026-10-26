@@ -5,7 +5,10 @@ declare receipt public.channel_connection_requests; channel public.channel_sessi
 begin
  -- Backend service role is already authorized by the configuration MCP gate.
  -- Browser calls still prove membership, support authority and session MFA.
- if auth.role() is distinct from 'service_role' then
+ if coalesce(
+   nullif(current_setting('request.jwt.claim.role', true), ''),
+   nullif(current_setting('request.jwt.claims', true), '')::jsonb->>'role'
+ ) is distinct from 'service_role' then
  if auth.uid() is null or not public.fn_role_at_least(p_org,'admin') or not public.fn_support_write_allowed(p_org)
  then raise exception 'connection_forbidden' using errcode='42501';end if;
  if not public.fn_session_mfa_proven() then raise exception 'connection_mfa_required' using errcode='42501';end if;

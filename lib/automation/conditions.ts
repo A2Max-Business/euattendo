@@ -312,17 +312,18 @@ export const conditionSchema = z.object({
  * grava. O AVALIADOR (`avaliaNo`) continua entendendo aninhamento, de propósito:
  * ele é leitura defensiva de jsonb que já esteja gravado no banco.
  *
- * O `any: z.undefined().optional()` do outro ramo mantém o combinador ÚNICO: um
- * objeto com as duas chaves não passa por nenhum dos dois.
+ * O `any: z.never().optional()` do outro ramo mantém o combinador ÚNICO: um
+ * objeto com as duas chaves não passa por nenhum dos dois. `never` também pode
+ * ser convertido em JSON Schema para a descoberta MCP; `undefined` não pode.
  */
 const conditionGroupSchema: z.ZodType<ConditionGroup> = z.union([
   z.object({
     all: z.array(conditionSchema).max(MAXIMO_DE_CONDICOES),
-    any: z.undefined().optional(),
+    any: z.never().optional(),
   }),
   z.object({
     any: z.array(conditionSchema).max(MAXIMO_DE_CONDICOES),
-    all: z.undefined().optional(),
+    all: z.never().optional(),
   }),
 ]);
 
